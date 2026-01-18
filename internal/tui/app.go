@@ -1078,7 +1078,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "m":
 			if m.state == viewBody {
 				m.showDetails = !m.showDetails
-				m.updateBodyViewport() // Refresh viewport with new header state
+				updateBodyViewport(&m) // Refresh viewport with new header state
 				return m, nil
 			}
 			// 'm' also goes to Mail from main menu
@@ -1461,7 +1461,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		
 		// Update viewport with rendered content
 		if m.state == viewBody && len(m.emails) > m.emailCursor {
-			m.updateBodyViewport()
+			updateBodyViewport(&m)
 		}
 		
 		// If we are loading a draft to edit:
@@ -1547,7 +1547,7 @@ func filterContacts(contacts []model.Contact, query string) []model.Contact {
 }
 
 // updateBodyViewport updates the viewport content with the current email
-func (m *Model) updateBodyViewport() {
+func updateBodyViewport(m *Model) {
 	if len(m.emails) <= m.emailCursor {
 		return
 	}
@@ -1577,10 +1577,16 @@ func (m *Model) updateBodyViewport() {
 	content.WriteString("--------------------------------------------------\n\n")
 	content.WriteString(renderEmailBody(m.bodyContent, m.htmlBody, 80))
 	
-	// Initialize viewport if needed
-	if m.bodyViewport.Width == 0 {
-		m.bodyViewport = viewport.New(m.width, m.height-4) // Leave room for title and help
+	// Initialize viewport with sensible defaults
+	width := m.width
+	height := m.height - 4
+	if width <= 0 {
+		width = 80
 	}
+	if height <= 0 {
+		height = 20
+	}
+	m.bodyViewport = viewport.New(width, height)
 	m.bodyViewport.SetContent(content.String())
 	m.bodyViewport.GotoTop()
 }
