@@ -141,10 +141,11 @@ type Model struct {
 	canLoadMore bool // If true, hitting bottom loads more
 
 	// Body View Data
-	bodyContent  string
-	htmlBody     string          // Raw HTML for image rendering
-	showDetails  bool            // Toggle expanded headers
-	bodyViewport viewport.Model  // Scrollable viewport for email body
+	bodyContent    string
+	htmlBody       string // Raw HTML for image rendering
+	showDetails    bool   // Toggle expanded headers
+	bodyViewport   viewport.Model
+	bodyScrollPos  int    // Track scroll position separately
 
 	// Composition Data
 	inputTo          textinput.Model
@@ -1111,7 +1112,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			} else if m.state == viewBody {
 				// Scroll up in email body
-				m.bodyViewport.LineUp(1)
+				if m.bodyScrollPos > 0 {
+					m.bodyScrollPos--
+				}
 				return m, nil
 			} else if m.state == viewMailboxes {
 				if m.mbCursor > 0 {
@@ -1151,7 +1154,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			} else if m.state == viewBody {
 				// Scroll down in email body
-				m.bodyViewport.LineDown(1)
+				m.bodyScrollPos++
 				return m, nil
 			} else if m.state == viewMailboxes {
 				if m.mbCursor < len(m.mailboxes)-1 {
@@ -1200,25 +1203,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "pgup", "ctrl+u":
 			if m.state == viewBody {
-				m.bodyViewport.HalfViewUp()
+				pageSize := m.height / 2
+				if pageSize < 5 {
+					pageSize = 5
+				}
+				m.bodyScrollPos -= pageSize
+				if m.bodyScrollPos < 0 {
+					m.bodyScrollPos = 0
+				}
 				return m, nil
 			}
 
 		case "pgdown", "ctrl+d", " ":
 			if m.state == viewBody {
-				m.bodyViewport.HalfViewDown()
+				pageSize := m.height / 2
+				if pageSize < 5 {
+					pageSize = 5
+				}
+				m.bodyScrollPos += pageSize
 				return m, nil
 			}
 
 		case "home", "g":
 			if m.state == viewBody {
-				m.bodyViewport.GotoTop()
+				m.bodyScrollPos = 0
 				return m, nil
 			}
 
 		case "end", "G":
 			if m.state == viewBody {
-				m.bodyViewport.GotoBottom()
+				m.bodyScrollPos = 99999 // Will be clamped in View
 				return m, nil
 			}
 
@@ -1286,6 +1300,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Always go to preview first, even for drafts
 				m.state = viewBody
 				m.loading = true
+				m.bodyScrollPos = 0 // Reset scroll position for new email
 				selectedEmail := m.emails[m.emailCursor]
 				if m.offlineMode || m.client == nil {
 					return m, fetchEmailBodyOfflineCmd(m.db, selectedEmail.ID)
@@ -1969,41 +1984,51 @@ func (m Model) View() string {
 			content.WriteString("--------------------------------------------------\n\n")
 			content.WriteString(renderEmailBody(m.bodyContent, m.htmlBody, 80))
 			
-			// Set up viewport with content
-			vp := m.bodyViewport
-			if vp.Width == 0 || vp.Height == 0 {
-				height := m.height - 4
-				if height <= 0 {
-					height = 20
-				}
-				width := m.width
-				if width <= 0 {
-					width = 80
-				}
-				vp = viewport.New(width, height)
-			}
-			vp.YOffset = m.bodyViewport.YOffset // Preserve scroll position
-			vp.SetContent(content.String())
+			// Split content into lines and handle scrolling manually
+			allLines := strings.Split(content.String(), "\n")
+			totalLines := len(allLines)
 			
-			// Build content with scroll bar
-			lines := strings.Split(vp.View(), "\n")
-			totalLines := vp.TotalLineCount()
-			viewHeight := vp.Height
+			viewHeight := m.height - 4
 			if viewHeight <= 0 {
-				viewHeight = len(lines)
+				viewHeight = 20
 			}
 			
-			// Calculate scroll bar position
+			// Clamp scroll position
+			scrollPos := m.bodyScrollPos
+			maxScroll := totalLines - viewHeight
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			if scrollPos > maxScroll {
+				scrollPos = maxScroll
+			}
+			if scrollPos < 0 {
+				scrollPos = 0
+			}
+			
+			// Get visible lines
+			endLine := scrollPos + viewHeight
+			if endLine > totalLines {
+				endLine = totalLines
+			}
+			visibleLines := allLines[scrollPos:endLine]
+			
+			// Build output with scroll bar
 			var output strings.Builder
-			for i, line := range lines {
+			for i, line := range visibleLines {
 				output.WriteString(line)
 				
 				// Add scroll indicator on right side if content is scrollable
-				if totalLines > viewHeight && i < viewHeight {
-					// Calculate if this line should show the scroll thumb
-					scrollPos := float64(vp.YOffset) / float64(totalLines-viewHeight)
-					thumbPos := int(scrollPos * float64(viewHeight-1))
-					if i == thumbPos {
+				if totalLines > viewHeight {
+					// Calculate thumb position
+					thumbSize := viewHeight * viewHeight / totalLines
+					if thumbSize < 1 {
+						thumbSize = 1
+					}
+					thumbStart := scrollPos * viewHeight / totalLines
+					thumbEnd := thumbStart + thumbSize
+					
+					if i >= thumbStart && i < thumbEnd {
 						output.WriteString(" ┃")
 					} else {
 						output.WriteString(" │")
@@ -2017,10 +2042,10 @@ func (m Model) View() string {
 			scrollInfo := ""
 			if totalLines > viewHeight {
 				pct := 0
-				if totalLines > viewHeight {
-					pct = int(float64(vp.YOffset) / float64(totalLines-viewHeight) * 100)
+				if maxScroll > 0 {
+					pct = scrollPos * 100 / maxScroll
 				}
-				scrollInfo = fmt.Sprintf(" [%d/%d lines, %d%%]", vp.YOffset+viewHeight, totalLines, pct)
+				scrollInfo = fmt.Sprintf(" [line %d/%d, %d%%]", scrollPos+1, totalLines, pct)
 			}
 			
 			help := fmt.Sprintf("\n(h/esc: back, j/k/↑/↓: scroll, R: reply, A: reply all, F: forward, m: details, b: browser%s", scrollInfo)
