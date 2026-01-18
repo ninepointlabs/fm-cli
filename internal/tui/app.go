@@ -1942,9 +1942,48 @@ func (m Model) View() string {
 	} else if m.state == viewBody {
 		if m.loading {
 			s.WriteString("Loading content...\n")
-		} else {
-			// Use the viewport for scrollable content
-			s.WriteString(m.bodyViewport.View())
+		} else if len(m.emails) > m.emailCursor {
+			// Build the email content
+			e := m.emails[m.emailCursor]
+			var content strings.Builder
+			
+			content.WriteString(fmt.Sprintf("Subject: %s\nFrom:    %s\nDate:    %s\n", e.Subject, e.From, e.Date))
+			
+			if m.showDetails {
+				if e.To != "" {
+					content.WriteString(fmt.Sprintf("To:      %s\n", e.To))
+				}
+				if e.Cc != "" {
+					content.WriteString(fmt.Sprintf("Cc:      %s\n", e.Cc))
+				}
+				if e.Bcc != "" {
+					content.WriteString(fmt.Sprintf("Bcc:     %s\n", e.Bcc))
+				}
+				if e.ReplyTo != "" {
+					content.WriteString(fmt.Sprintf("ReplyTo: %s\n", e.ReplyTo))
+				}
+				content.WriteString(fmt.Sprintf("ID:      %s\n", e.ID))
+				content.WriteString(fmt.Sprintf("Mailboxes: %v\n", e.MailboxIDs))
+			}
+			
+			content.WriteString("--------------------------------------------------\n\n")
+			content.WriteString(renderEmailBody(m.bodyContent, m.htmlBody, 80))
+			
+			// Set up viewport with content
+			vp := m.bodyViewport
+			if vp.Width == 0 || vp.Height == 0 {
+				height := m.height - 4
+				if height <= 0 {
+					height = 20
+				}
+				width := m.width
+				if width <= 0 {
+					width = 80
+				}
+				vp = viewport.New(width, height)
+			}
+			vp.SetContent(content.String())
+			s.WriteString(vp.View())
 		}
 		
 		// Show scroll position
