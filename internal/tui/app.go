@@ -1504,36 +1504,54 @@ func filterContacts(contacts []model.Contact, query string) []model.Contact {
 }
 
 // Helper to make links clickable (OSC 8)
+// shortenURL returns a display-friendly shortened URL
+func shortenURL(url string, maxLen int) string {
+	if len(url) <= maxLen {
+		return url
+	}
+	
+	// Try to extract domain and show domain + "..."
+	// e.g., https://click.redditmail.com/CL0/https%3A... -> click.redditmail.com/...
+	re := regexp.MustCompile(`^(https?://)([^/]+)(.*)$`)
+	matches := re.FindStringSubmatch(url)
+	if matches != nil {
+		domain := matches[2]
+		path := matches[3]
+		
+		// If domain alone is short enough, show domain + truncated path
+		if len(domain) < maxLen-4 {
+			remaining := maxLen - len(domain) - 4 // 4 for "..." and "/"
+			if remaining > 0 && len(path) > 0 {
+				if len(path) > remaining {
+					return domain + path[:remaining] + "..."
+				}
+				return domain + path
+			}
+			return domain + "/..."
+		}
+		return domain[:maxLen-3] + "..."
+	}
+	
+	return url[:maxLen-3] + "..."
+}
+
 func linkify(text string) string {
 	// 1. Convert Markdown links: [Title](URL) -> OSC 8 link
 	reMD := regexp.MustCompile(`\[([^\]]+)\]\((https?://[^)]+)\)`)
 	text = reMD.ReplaceAllString(text, "\x1b]8;;$2\x1b\\$1\x1b]8;;\x1b\\")
 
-	// 2. Convert Bare URLs: https://google.com -> OSC 8 link
-	// We use a negative lookbehind/lookahead logic implicitly by replacing existing OSC 8 sequences?
-	// Or simpler: Just find http... that is NOT preceded by ]8;;
-	// But regex in Go doesn't support lookbehind.
-	// So we can assume step 1 handles Markdown links. Now we have bare URLs in the remaining text.
-	// Note: Step 1 results contain `https://` inside the escape sequence.
-	// So if we run a naive replace "http...", we might double-link inside the escape sequence.
-	// A robust way works on non-linked text chunks, but that's complex.
-	// Simple Hack: Since Markdown conversion usually consumes the URL, let's just do bare URL replacement for plain text mostly.
-	// Or, use a regex that ignores things inside escape codes? Hard.
-
-	// Alternative: only match URLs not preceded by `;;` (part of OSC 8 opening) or `(` (part of MD structure we missed?).
-	// The safest bet for this simple TUI:
-	// If text starts with "[Converted HTML]" it likely has MD links.
-	// If it doesn't, it's Plain Text and has bare links.
-
+	// 2. Convert Bare URLs: https://google.com -> OSC 8 link with shortened display
 	if strings.Contains(text, "[Converted HTML]") {
-		// It's mostly Markdown links now.
-		// There might be bare links in MD too, but let's trust MD converter.
 		return text
 	}
 
-	// Plain text mode: Wrap all bare URLs
+	// Plain text mode: Wrap all bare URLs with shortened display text
 	reURL := regexp.MustCompile(`(https?://[^\s()<>"]+)`)
-	return reURL.ReplaceAllString(text, "\x1b]8;;$1\x1b\\$1\x1b]8;;\x1b\\")
+	text = reURL.ReplaceAllStringFunc(text, func(url string) string {
+		display := shortenURL(url, 50)
+		return fmt.Sprintf("\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\", url, display)
+	})
+	return text
 }
 
 // htmlToText converts HTML to readable plain text using a proper parser
@@ -1590,15 +1608,15 @@ func htmlToText(htmlContent string) string {
 					extractLinkText(n)
 					
 					text := strings.TrimSpace(linkText.String())
-					if text != "" && text != href {
-						// Show as "text (url)"
+					if text != "" && text != href && !strings.HasPrefix(text, "http") {
+						// Show as "text (shortened_url)"
 						buf.WriteString(text)
 						buf.WriteString(" (")
-						buf.WriteString(href)
+						buf.WriteString(shortenURL(href, 40))
 						buf.WriteString(") ")
 					} else {
-						// Just show URL
-						buf.WriteString(href)
+						// Just show shortened URL
+						buf.WriteString(shortenURL(href, 50))
 						buf.WriteString(" ")
 					}
 					return // Don't process children again
