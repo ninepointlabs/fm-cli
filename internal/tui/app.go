@@ -17,6 +17,7 @@ import (
 	"fm-cli/internal/storage"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/net/html"
@@ -140,9 +141,10 @@ type Model struct {
 	canLoadMore bool // If true, hitting bottom loads more
 
 	// Body View Data
-	bodyContent string
-	htmlBody    string // Raw HTML for image rendering
-	showDetails bool   // Toggle expanded headers
+	bodyContent  string
+	htmlBody     string          // Raw HTML for image rendering
+	showDetails  bool            // Toggle expanded headers
+	bodyViewport viewport.Model  // Scrollable viewport for email body
 
 	// Composition Data
 	inputTo          textinput.Model
@@ -423,6 +425,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Update viewport size
+		m.bodyViewport.Width = msg.Width
+		m.bodyViewport.Height = msg.Height - 4
 		// Don't return, let UI resize if needed (though mostly static)
 	}
 
@@ -1073,6 +1078,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "m":
 			if m.state == viewBody {
 				m.showDetails = !m.showDetails
+				m.updateBodyViewport() // Refresh viewport with new header state
 				return m, nil
 			}
 			// 'm' also goes to Mail from main menu
@@ -1102,6 +1108,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.menuCursor > 0 {
 					m.menuCursor--
 				}
+				return m, nil
+			} else if m.state == viewBody {
+				// Scroll up in email body
+				m.bodyViewport.LineUp(1)
 				return m, nil
 			} else if m.state == viewMailboxes {
 				if m.mbCursor > 0 {
@@ -1138,6 +1148,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.menuCursor < len(mainMenuItems)-1 {
 					m.menuCursor++
 				}
+				return m, nil
+			} else if m.state == viewBody {
+				// Scroll down in email body
+				m.bodyViewport.LineDown(1)
 				return m, nil
 			} else if m.state == viewMailboxes {
 				if m.mbCursor < len(m.mailboxes)-1 {
@@ -1181,6 +1195,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.settingsCursor < 1 { // Only 1 setting currently
 					m.settingsCursor++
 				}
+				return m, nil
+			}
+
+		case "pgup", "ctrl+u":
+			if m.state == viewBody {
+				m.bodyViewport.HalfViewUp()
+				return m, nil
+			}
+
+		case "pgdown", "ctrl+d", " ":
+			if m.state == viewBody {
+				m.bodyViewport.HalfViewDown()
+				return m, nil
+			}
+
+		case "home", "g":
+			if m.state == viewBody {
+				m.bodyViewport.GotoTop()
+				return m, nil
+			}
+
+		case "end", "G":
+			if m.state == viewBody {
+				m.bodyViewport.GotoBottom()
 				return m, nil
 			}
 
@@ -1421,6 +1459,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.htmlBody = msg.htmlBody
 		m.loading = false
 		
+		// Update viewport with rendered content
+		if m.state == viewBody && len(m.emails) > m.emailCursor {
+			m.updateBodyViewport()
+		}
+		
 		// If we are loading a draft to edit:
 		if m.draftID != "" && (m.state == viewComposeTo || m.state == viewEmails) {
 			// We came here from selecting a draft
@@ -1501,6 +1544,45 @@ func filterContacts(contacts []model.Contact, query string) []model.Contact {
 		}
 	}
 	return matches
+}
+
+// updateBodyViewport updates the viewport content with the current email
+func (m *Model) updateBodyViewport() {
+	if len(m.emails) <= m.emailCursor {
+		return
+	}
+	
+	e := m.emails[m.emailCursor]
+	var content strings.Builder
+	
+	content.WriteString(fmt.Sprintf("Subject: %s\nFrom:    %s\nDate:    %s\n", e.Subject, e.From, e.Date))
+	
+	if m.showDetails {
+		if e.To != "" {
+			content.WriteString(fmt.Sprintf("To:      %s\n", e.To))
+		}
+		if e.Cc != "" {
+			content.WriteString(fmt.Sprintf("Cc:      %s\n", e.Cc))
+		}
+		if e.Bcc != "" {
+			content.WriteString(fmt.Sprintf("Bcc:     %s\n", e.Bcc))
+		}
+		if e.ReplyTo != "" {
+			content.WriteString(fmt.Sprintf("ReplyTo: %s\n", e.ReplyTo))
+		}
+		content.WriteString(fmt.Sprintf("ID:      %s\n", e.ID))
+		content.WriteString(fmt.Sprintf("Mailboxes: %v\n", e.MailboxIDs))
+	}
+	
+	content.WriteString("--------------------------------------------------\n\n")
+	content.WriteString(renderEmailBody(m.bodyContent, m.htmlBody, 80))
+	
+	// Initialize viewport if needed
+	if m.bodyViewport.Width == 0 {
+		m.bodyViewport = viewport.New(m.width, m.height-4) // Leave room for title and help
+	}
+	m.bodyViewport.SetContent(content.String())
+	m.bodyViewport.GotoTop()
 }
 
 // Helper to make links clickable (OSC 8)
@@ -1855,43 +1937,24 @@ func (m Model) View() string {
 		if m.loading {
 			s.WriteString("Loading content...\n")
 		} else {
-			if len(m.emails) > m.emailCursor {
-				e := m.emails[m.emailCursor]
-				s.WriteString(fmt.Sprintf("Subject: %s\nFrom:    %s\nDate:    %s\n", e.Subject, e.From, e.Date))
-
-				if m.showDetails {
-					if e.To != "" {
-						s.WriteString(fmt.Sprintf("To:      %s\n", e.To))
-					}
-					if e.Cc != "" {
-						s.WriteString(fmt.Sprintf("Cc:      %s\n", e.Cc))
-					}
-					if e.Bcc != "" {
-						s.WriteString(fmt.Sprintf("Bcc:     %s\n", e.Bcc))
-					}
-					if e.ReplyTo != "" {
-						s.WriteString(fmt.Sprintf("ReplyTo: %s\n", e.ReplyTo))
-					}
-					s.WriteString(fmt.Sprintf("ID:      %s\n", e.ID))
-					s.WriteString(fmt.Sprintf("Mailboxes: %v\n", e.MailboxIDs))
-				}
-
-				s.WriteString("--------------------------------------------------\n\n")
-				
-				// Render body with glamour for HTML or linkify for plain text
-				content := renderEmailBody(m.bodyContent, m.htmlBody, 80)
-				s.WriteString(content)
-			}
+			// Use the viewport for scrollable content
+			s.WriteString(m.bodyViewport.View())
 		}
 		
-		help := "\n\n(h/esc: back, R: reply, A: reply all, F: forward, m: toggle details, b: browser"
+		// Show scroll position
+		scrollInfo := ""
+		if m.bodyViewport.TotalLineCount() > m.bodyViewport.Height {
+			scrollInfo = fmt.Sprintf(" [%d%%]", int(m.bodyViewport.ScrollPercent()*100))
+		}
+		
+		help := fmt.Sprintf("\n(h/esc: back, j/k/↑/↓: scroll, R: reply, A: reply all, F: forward, m: details, b: browser%s", scrollInfo)
 		if images.HasGraphicsSupport() {
 			help += ", i: images)"
 		} else {
 			help += ")"
 		}
 		if len(m.emails) > m.emailCursor && m.emails[m.emailCursor].IsDraft {
-			help = "\n\n(h/esc: back, e: edit draft, m: toggle details, b: browser)"
+			help = fmt.Sprintf("\n(h/esc: back, j/k/↑/↓: scroll, e: edit draft, m: details, b: browser%s)", scrollInfo)
 		}
 		s.WriteString(help)
 
