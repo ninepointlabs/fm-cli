@@ -1546,6 +1546,16 @@ func htmlToText(htmlContent string) string {
 	var buf strings.Builder
 	var extractText func(*html.Node)
 	
+	// Helper to get attribute value
+	getAttr := func(n *html.Node, key string) string {
+		for _, attr := range n.Attr {
+			if attr.Key == key {
+				return attr.Val
+			}
+		}
+		return ""
+	}
+	
 	extractText = func(n *html.Node) {
 		// Skip style, script, head elements entirely
 		if n.Type == html.ElementNode {
@@ -1559,6 +1569,40 @@ func htmlToText(htmlContent string) string {
 				buf.WriteString("\n")
 			case "td", "th":
 				buf.WriteString(" ")
+			case "a":
+				// Handle links - extract text and href
+				href := getAttr(n, "href")
+				if href != "" && strings.HasPrefix(href, "http") {
+					// Get link text
+					var linkText strings.Builder
+					var extractLinkText func(*html.Node)
+					extractLinkText = func(ln *html.Node) {
+						if ln.Type == html.TextNode {
+							text := strings.TrimSpace(ln.Data)
+							if text != "" {
+								linkText.WriteString(text)
+							}
+						}
+						for c := ln.FirstChild; c != nil; c = c.NextSibling {
+							extractLinkText(c)
+						}
+					}
+					extractLinkText(n)
+					
+					text := strings.TrimSpace(linkText.String())
+					if text != "" && text != href {
+						// Show as "text (url)"
+						buf.WriteString(text)
+						buf.WriteString(" (")
+						buf.WriteString(href)
+						buf.WriteString(") ")
+					} else {
+						// Just show URL
+						buf.WriteString(href)
+						buf.WriteString(" ")
+					}
+					return // Don't process children again
+				}
 			}
 		}
 		
