@@ -1982,26 +1982,58 @@ func (m Model) View() string {
 				}
 				vp = viewport.New(width, height)
 			}
+			vp.YOffset = m.bodyViewport.YOffset // Preserve scroll position
 			vp.SetContent(content.String())
-			s.WriteString(vp.View())
+			
+			// Build content with scroll bar
+			lines := strings.Split(vp.View(), "\n")
+			totalLines := vp.TotalLineCount()
+			viewHeight := vp.Height
+			if viewHeight <= 0 {
+				viewHeight = len(lines)
+			}
+			
+			// Calculate scroll bar position
+			var output strings.Builder
+			for i, line := range lines {
+				output.WriteString(line)
+				
+				// Add scroll indicator on right side if content is scrollable
+				if totalLines > viewHeight && i < viewHeight {
+					// Calculate if this line should show the scroll thumb
+					scrollPos := float64(vp.YOffset) / float64(totalLines-viewHeight)
+					thumbPos := int(scrollPos * float64(viewHeight-1))
+					if i == thumbPos {
+						output.WriteString(" ┃")
+					} else {
+						output.WriteString(" │")
+					}
+				}
+				output.WriteString("\n")
+			}
+			s.WriteString(output.String())
+			
+			// Show scroll position
+			scrollInfo := ""
+			if totalLines > viewHeight {
+				pct := 0
+				if totalLines > viewHeight {
+					pct = int(float64(vp.YOffset) / float64(totalLines-viewHeight) * 100)
+				}
+				scrollInfo = fmt.Sprintf(" [%d/%d lines, %d%%]", vp.YOffset+viewHeight, totalLines, pct)
+			}
+			
+			help := fmt.Sprintf("\n(h/esc: back, j/k/↑/↓: scroll, R: reply, A: reply all, F: forward, m: details, b: browser%s", scrollInfo)
+			if images.HasGraphicsSupport() {
+				help += ", i: images)"
+			} else {
+				help += ")"
+			}
+			if e.IsDraft {
+				help = fmt.Sprintf("\n(h/esc: back, j/k/↑/↓: scroll, e: edit draft, m: details, b: browser%s)", scrollInfo)
+			}
+			s.WriteString(help)
 		}
-		
-		// Show scroll position
-		scrollInfo := ""
-		if m.bodyViewport.TotalLineCount() > m.bodyViewport.Height {
-			scrollInfo = fmt.Sprintf(" [%d%%]", int(m.bodyViewport.ScrollPercent()*100))
-		}
-		
-		help := fmt.Sprintf("\n(h/esc: back, j/k/↑/↓: scroll, R: reply, A: reply all, F: forward, m: details, b: browser%s", scrollInfo)
-		if images.HasGraphicsSupport() {
-			help += ", i: images)"
-		} else {
-			help += ")"
-		}
-		if len(m.emails) > m.emailCursor && m.emails[m.emailCursor].IsDraft {
-			help = fmt.Sprintf("\n(h/esc: back, j/k/↑/↓: scroll, e: edit draft, m: details, b: browser%s)", scrollInfo)
-		}
-		s.WriteString(help)
 
 	} else if m.state == viewComposeTo {
 		s.WriteString("Compose New Email\n\n")
