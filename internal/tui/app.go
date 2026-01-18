@@ -2013,13 +2013,16 @@ func (m Model) View() string {
 			}
 			visibleLines := allLines[scrollPos:endLine]
 			
+			// Only show scroll bar if content exceeds view
+			showScrollBar := totalLines > viewHeight
+			
 			// Build output with scroll bar
 			var output strings.Builder
 			for i, line := range visibleLines {
 				output.WriteString(line)
 				
-				// Add scroll indicator on right side if content is scrollable
-				if totalLines > viewHeight {
+				// Add scroll indicator on right side only if scrollable
+				if showScrollBar {
 					// Calculate thumb position
 					thumbSize := viewHeight * viewHeight / totalLines
 					if thumbSize < 1 {
