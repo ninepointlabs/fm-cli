@@ -1999,7 +1999,6 @@ func updateBodyViewport(m *Model) {
 	}
 	
 	content.WriteString("--------------------------------------------------\n\n")
-	content.WriteString(renderEmailBody(m.bodyContent, m.htmlBody, 80))
 	
 	// Initialize viewport with sensible defaults
 	width := m.width
@@ -2010,6 +2009,15 @@ func updateBodyViewport(m *Model) {
 	if height <= 0 {
 		height = 20
 	}
+	
+	// Use actual viewport width for word wrapping
+	wrapWidth := width - 4 // Leave some margin
+	if wrapWidth < 40 {
+		wrapWidth = 40
+	}
+	bodyText := renderEmailBody(m.bodyContent, m.htmlBody, wrapWidth)
+	content.WriteString(wrapTextParagraphs(bodyText, wrapWidth))
+	
 	m.bodyViewport = viewport.New(width, height)
 	m.bodyViewport.SetContent(content.String())
 	m.bodyViewport.GotoTop()
@@ -2271,6 +2279,37 @@ func wrapText(text string, maxWidth int) string {
 		if wordLen > maxWidth && i < len(words)-1 {
 			result.WriteString("\n")
 			lineLen = 0
+		}
+	}
+	
+	return result.String()
+}
+
+// wrapTextParagraphs wraps text while preserving paragraph structure
+func wrapTextParagraphs(text string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return text
+	}
+	
+	var result strings.Builder
+	paragraphs := strings.Split(text, "\n")
+	
+	for i, para := range paragraphs {
+		para = strings.TrimSpace(para)
+		
+		// Empty lines (paragraph breaks) are preserved
+		if para == "" {
+			result.WriteString("\n")
+			continue
+		}
+		
+		// Wrap the paragraph
+		wrapped := wrapText(para, maxWidth)
+		result.WriteString(wrapped)
+		
+		// Add newline after paragraph unless it's the last one
+		if i < len(paragraphs)-1 {
+			result.WriteString("\n")
 		}
 	}
 	
@@ -2539,7 +2578,14 @@ func (m Model) View() string {
 			}
 			
 			content.WriteString("--------------------------------------------------\n\n")
-			content.WriteString(renderEmailBody(m.bodyContent, m.htmlBody, 80))
+			
+			// Use actual width for word wrapping
+			wrapWidth := m.width - 4
+			if wrapWidth < 40 {
+				wrapWidth = 40
+			}
+			bodyText := renderEmailBody(m.bodyContent, m.htmlBody, wrapWidth)
+			content.WriteString(wrapTextParagraphs(bodyText, wrapWidth))
 			
 			// Split content into lines and handle scrolling manually
 			allLines := strings.Split(content.String(), "\n")
