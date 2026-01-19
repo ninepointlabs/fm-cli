@@ -47,20 +47,21 @@ nfpms:
       - src: README.md
         dst: /usr/share/doc/fm-cli/README.md
 
-aurs:
-  - name: fm-cli-bin
-    homepage: https://github.com/timappledotcom/fm-cli
-    description: Terminal-based TUI for Fastmail
-    maintainers:
-      - "Tim Apple"
-    license: MIT
-    private_key: "{{ .Env.AUR_SSH_KEY }}"
-    git_url: "ssh://aur@aur.archlinux.org/fm-cli-bin.git"
-    package: |-
-      install -Dm755 fm-cli "${pkgdir}/usr/bin/fm-cli"
-      install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/fm-cli/LICENSE"
-      install -Dm644 README.md "${pkgdir}/usr/share/doc/fm-cli/README.md"
-    skip_upload: auto
+# AUR publishing disabled - requires AUR_SSH_KEY secret
+# aurs:
+#   - name: fm-cli-bin
+#     homepage: https://github.com/timappledotcom/fm-cli
+#     description: Terminal-based TUI for Fastmail
+#     maintainers:
+#       - "Tim Apple"
+#     license: MIT
+#     private_key: "{{ .Env.AUR_SSH_KEY }}"
+#     git_url: "ssh://aur@aur.archlinux.org/fm-cli-bin.git"
+#     package: |-
+#       install -Dm755 fm-cli "${pkgdir}/usr/bin/fm-cli"
+#       install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/fm-cli/LICENSE"
+#       install -Dm644 README.md "${pkgdir}/usr/share/doc/fm-cli/README.md"
+#     skip_upload: auto
 
 checksum:
   name_template: "checksums.txt"
