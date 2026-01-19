@@ -37,6 +37,7 @@ const (
 	viewCalendar
 	viewContacts
 	viewSettings
+	viewSearch // Global email search
 )
 
 // MainMenuItem represents an option in the main menu
@@ -48,45 +49,207 @@ type MainMenuItem struct {
 
 // Styles
 var (
+	// Base colors
+	primaryColor   = lipgloss.Color("#00D4AA")   // Bright teal
+	secondaryColor = lipgloss.Color("#FF6B9D")   // Pink
+	accentColor    = lipgloss.Color("#FFA500")   // Orange
+	successColor   = lipgloss.Color("#00E676")   // Green
+	warningColor   = lipgloss.Color("#FFD700")   // Gold
+	errorColor     = lipgloss.Color("#FF5252")   // Red
+	mutedColor     = lipgloss.Color("#6C757D")   // Gray
+	bgColor        = lipgloss.Color("#1A1B26")   // Dark bg
+	fgColor        = lipgloss.Color("#C0CAF5")   // Light fg
+	
 	appStyle = lipgloss.NewStyle().Padding(1, 2)
 
+	// Title and header styles
 	titleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFDF5")).
-			Background(lipgloss.Color("#25A065")).
-			Padding(0, 1)
+			Foreground(lipgloss.Color("#000000")).
+			Background(primaryColor).
+			Bold(true).
+			Padding(0, 2).
+			MarginBottom(1)
+
+	subtitleStyle = lipgloss.NewStyle().
+			Foreground(secondaryColor).
+			Bold(true).
+			MarginTop(1)
+
+	breadcrumbStyle = lipgloss.NewStyle().
+			Foreground(mutedColor).
+			Italic(true)
+
+	// Box and border styles
+	boxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(primaryColor).
+			Padding(1, 2).
+			MarginTop(1)
+
+	headerBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.DoubleBorder()).
+			BorderForeground(accentColor).
+			Padding(0, 1).
+			Bold(true)
 
 	// Mailbox Styles
 	mailboxStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			PaddingLeft(1)
+			Foreground(fgColor).
+			PaddingLeft(2)
 
 	selectedMailboxStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("229")).
-				Background(lipgloss.Color("57")).
-				PaddingLeft(1)
+				Foreground(lipgloss.Color("#000000")).
+				Background(primaryColor).
+				Bold(true).
+				PaddingLeft(2).
+				PaddingRight(2)
+
+	mailboxUnreadBadgeStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#000000")).
+				Background(successColor).
+				Bold(true).
+				Padding(0, 1).
+				MarginLeft(1)
 
 	// Email Styles
 	emailItemStyle = lipgloss.NewStyle().
-			PaddingLeft(1).
-			Border(lipgloss.NormalBorder(), false, false, false, true).
-			BorderForeground(lipgloss.Color("240"))
+			PaddingLeft(2).
+			Border(lipgloss.NormalBorder(), false, false, true, false).
+			BorderForeground(lipgloss.Color("#2A2B3C"))
 
 	selectedEmailItemStyle = lipgloss.NewStyle().
-				PaddingLeft(1).
-				Foreground(lipgloss.Color("229")).
-				Background(lipgloss.Color("57")).
-				Border(lipgloss.NormalBorder(), false, false, false, true).
-				BorderForeground(lipgloss.Color("57"))
+				PaddingLeft(2).
+				Foreground(lipgloss.Color("#000000")).
+				Background(primaryColor).
+				Bold(true).
+				Border(lipgloss.ThickBorder(), false, false, true, false).
+				BorderForeground(primaryColor)
 
 	unreadStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#04B575")).
+			Foreground(successColor).
 			Bold(true)
+
+	readStyle = lipgloss.NewStyle().
+			Foreground(mutedColor)
+
+	emailFromStyle = lipgloss.NewStyle().
+			Foreground(secondaryColor).
+			Bold(true)
+
+	emailSubjectStyle = lipgloss.NewStyle().
+			Foreground(fgColor)
+
+	emailDateStyle = lipgloss.NewStyle().
+			Foreground(accentColor).
+			Italic(true)
+
+	// Contact Styles
+	contactNameStyle = lipgloss.NewStyle().
+				Foreground(primaryColor).
+				Bold(true)
+
+	contactEmailStyle = lipgloss.NewStyle().
+				Foreground(accentColor)
+
+	contactFieldLabelStyle = lipgloss.NewStyle().
+				Foreground(secondaryColor).
+				Bold(true)
+
+	contactFieldValueStyle = lipgloss.NewStyle().
+				Foreground(fgColor)
+
+	// Calendar Styles
+	eventTitleStyle = lipgloss.NewStyle().
+			Foreground(primaryColor).
+			Bold(true)
+
+	eventTimeStyle = lipgloss.NewStyle().
+			Foreground(accentColor).
+			Bold(true)
+
+	eventDateHeaderStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#000000")).
+				Background(secondaryColor).
+				Bold(true).
+				Padding(0, 1).
+				MarginTop(1)
+
+	todayBadgeStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#000000")).
+			Background(warningColor).
+			Bold(true).
+			Padding(0, 1)
+
+	// Button and interactive styles
+	buttonStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#000000")).
+			Background(primaryColor).
+			Bold(true).
+			Padding(0, 2).
+			MarginRight(1)
+
+	disabledButtonStyle = lipgloss.NewStyle().
+				Foreground(mutedColor).
+				Background(lipgloss.Color("#2A2B3C")).
+				Padding(0, 2).
+				MarginRight(1)
+
+	// Input styles
+	inputFocusedStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(primaryColor).
+				Padding(0, 1)
+
+	inputBlurredStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(mutedColor).
+				Padding(0, 1)
+
+	// Status and badge styles
+	statusStyle = lipgloss.NewStyle().
+			Foreground(fgColor).
+			Background(lipgloss.Color("#2A2B3C")).
+			Padding(0, 1)
+
+	badgeStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#000000")).
+			Background(accentColor).
+			Bold(true).
+			Padding(0, 1).
+			MarginLeft(1)
+
+	successBadgeStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#000000")).
+				Background(successColor).
+				Bold(true).
+				Padding(0, 1)
+
+	errorBadgeStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFFFFF")).
+			Background(errorColor).
+			Bold(true).
+			Padding(0, 1)
+
+	// Help text style
+	helpStyle = lipgloss.NewStyle().
+			Foreground(mutedColor).
+			Italic(true).
+			MarginTop(1)
+
+	keyStyle = lipgloss.NewStyle().
+			Foreground(accentColor).
+			Bold(true)
+
+	// Divider style
+	dividerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#2A2B3C"))
 )
 
 // msg types
 type mailboxesLoadedMsg []model.Mailbox
 type emailsLoadedMsg []model.Email
 type emailsRefreshedMsg []model.Email // For refresh without appending
+type searchResultsMsg []model.Email   // For global search results
 type emailBodyLoadedMsg struct {
 	body     string
 	htmlBody string
@@ -111,6 +274,7 @@ type errorMsg error
 // Main menu items
 var mainMenuItems = []MainMenuItem{
 	{Name: "Mail", Shortcut: "m", State: viewMailboxes},
+	{Name: "Search Mail", Shortcut: "/", State: viewSearch},
 	{Name: "Calendar", Shortcut: "c", State: viewCalendar},
 	{Name: "Contacts", Shortcut: "o", State: viewContacts},
 	{Name: "Settings", Shortcut: "s", State: viewSettings},
@@ -175,10 +339,18 @@ type Model struct {
 	addressBookCursor int
 	contacts          []model.Contact
 	contactCursor     int
+	contactOffset     int        // Scroll offset for contacts
 	viewContactDetail bool       // Viewing contact details
 	editingContact    *model.Contact // Contact being created/edited
 	contactInput      textinput.Model
 	contactEditField  int // Which field is being edited
+
+	// Search
+	searchInput   textinput.Model
+	searchActive  bool   // Whether search mode is active
+	searchQuery   string // Current search filter
+	searchResults []model.Email // Global search results
+	searchCursor  int           // Cursor for search results
 
 	// Settings
 	settingsCursor int
@@ -206,6 +378,10 @@ func NewModelWithStorage(client *api.Client, davClient *api.DAVClient, db *stora
 	tiContact := textinput.New()
 	tiContact.Placeholder = "Contact name"
 
+	tiSearch := textinput.New()
+	tiSearch.Placeholder = "Search..."
+	tiSearch.Prompt = "/ "
+
 	return Model{
 		client:       client,
 		davClient:    davClient,
@@ -216,6 +392,7 @@ func NewModelWithStorage(client *api.Client, davClient *api.DAVClient, db *stora
 		inputSubject: tiSubj,
 		eventInput:   tiEvent,
 		contactInput: tiContact,
+		searchInput:  tiSearch,
 		loading:      false,
 		agendaStart:  time.Now().Truncate(24 * time.Hour),
 		agendaDays:   14,
@@ -275,6 +452,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.canLoadMore = true
 		}
+		m.loading = false
+		return m, nil
+
+	case searchResultsMsg:
+		m.searchResults = []model.Email(msg)
+		m.searchCursor = 0
 		m.loading = false
 		return m, nil
 
@@ -352,7 +535,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				defaultAB = m.addressBooks[0].ID
 			}
 			if defaultAB != "" {
-				return m, fetchContactsCmd(m.davClient, defaultAB, 100)
+				return m, fetchContactsCmd(m.davClient, defaultAB, 500)
 			}
 		}
 		return m, nil
@@ -401,7 +584,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.addressBookCursor < len(m.addressBooks) {
 				abID = m.addressBooks[m.addressBookCursor].ID
 			}
-			return m, fetchContactsCmd(m.davClient, abID, 100)
+			return m, fetchContactsCmd(m.davClient, abID, 500)
 		}
 		return m, nil
 
@@ -414,7 +597,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.addressBookCursor < len(m.addressBooks) {
 				abID = m.addressBooks[m.addressBookCursor].ID
 			}
-			return m, fetchContactsCmd(m.davClient, abID, 100)
+			return m, fetchContactsCmd(m.davClient, abID, 500)
 		}
 		return m, nil
 
@@ -430,6 +613,52 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.bodyViewport.Width = msg.Width
 		m.bodyViewport.Height = msg.Height - 4
 		// Don't return, let UI resize if needed (though mostly static)
+	}
+
+	// Handle Search Mode
+	if m.searchActive {
+		m.searchInput, cmd = m.searchInput.Update(msg)
+		
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.Type {
+			case tea.KeyEnter:
+				query := m.searchInput.Value()
+				m.searchActive = false
+				m.searchInput.Blur()
+				// For viewSearch, perform server-side search
+				if m.state == viewSearch && query != "" && m.client != nil {
+					m.loading = true
+					m.searchQuery = query
+					return m, searchEmailsCmd(m.client, query)
+				}
+				// For other views, just set the local filter
+				m.searchQuery = query
+				m.emailCursor = 0
+				m.emailOffset = 0
+				m.eventCursor = 0
+				m.contactCursor = 0
+				m.contactOffset = 0
+				return m, nil
+			case tea.KeyEsc:
+				m.searchActive = false
+				m.searchInput.Blur()
+				// If in search view with no results, go back to menu
+				if m.state == viewSearch && len(m.searchResults) == 0 {
+					m.state = viewMainMenu
+					m.searchQuery = ""
+					m.searchInput.SetValue("")
+				}
+				return m, nil
+			case tea.KeyCtrlC:
+				return m, tea.Quit
+			}
+			// Update filter in real-time as user types (for local filter views only)
+			if m.state != viewSearch {
+				m.searchQuery = m.searchInput.Value()
+			}
+		}
+		return m, cmd
 	}
 
 	// Handle Calendar Event Editing
@@ -798,16 +1027,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case "3":
-			// Go to Contacts
+			// Go to Contacts - always refresh
 			if m.state != viewComposeTo && m.state != viewComposeSubject && m.state != viewComposeConfirm {
 				m.state = viewContacts
-				m.contactCursor = 0 // Reset cursor
-				if len(m.addressBooks) == 0 && m.client != nil && !m.offlineMode && m.davClient != nil {
+				m.contactCursor = 0
+				m.contactOffset = 0
+				if m.davClient != nil && !m.offlineMode {
 					m.loading = true
-					return m, fetchAddressBooksCmd(m.davClient)
-				} else if len(m.addressBooks) > 0 && len(m.contacts) == 0 && m.davClient != nil && !m.offlineMode {
-					// Address books loaded but no contacts yet - fetch them
-					m.loading = true
+					if len(m.addressBooks) == 0 {
+						return m, fetchAddressBooksCmd(m.davClient)
+					}
+					// Always fetch fresh contacts
 					defaultAB := m.addressBooks[0].ID
 					for _, ab := range m.addressBooks {
 						if ab.IsDefault {
@@ -815,7 +1045,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							break
 						}
 					}
-					return m, fetchContactsCmd(m.davClient, defaultAB, 100)
+					return m, fetchContactsCmd(m.davClient, defaultAB, 500)
 				}
 				return m, nil
 			}
@@ -996,7 +1226,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							break
 						}
 					}
-					return m, tea.Batch(textinput.Blink, fetchContactsCmd(m.davClient, defaultAB, 100))
+					return m, tea.Batch(textinput.Blink, fetchContactsCmd(m.davClient, defaultAB, 500))
 				}
 			}
 			return m, textinput.Blink
@@ -1137,6 +1367,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.state == viewContacts && !m.viewContactDetail && m.editingContact == nil {
 				if m.contactCursor > 0 {
 					m.contactCursor--
+					if m.contactCursor < m.contactOffset {
+						m.contactOffset--
+					}
+				}
+				return m, nil
+			} else if m.state == viewSearch && !m.searchActive && len(m.searchResults) > 0 {
+				if m.searchCursor > 0 {
+					m.searchCursor--
 				}
 				return m, nil
 			} else if m.state == viewSettings {
@@ -1190,8 +1428,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			} else if m.state == viewContacts && !m.viewContactDetail && m.editingContact == nil {
+				// Use fixed page height that matches rendering
+				pageHeight := 10
+				if m.height > 15 {
+					pageHeight = m.height - 12
+				}
+				if pageHeight < 5 {
+					pageHeight = 5
+				}
+				if pageHeight > 20 {
+					pageHeight = 20
+				}
+				
 				if m.contactCursor < len(m.contacts)-1 {
 					m.contactCursor++
+					if m.contactCursor >= m.contactOffset+pageHeight {
+						m.contactOffset++
+					}
+				}
+				return m, nil
+			} else if m.state == viewSearch && !m.searchActive && len(m.searchResults) > 0 {
+				if m.searchCursor < len(m.searchResults)-1 {
+					m.searchCursor++
 				}
 				return m, nil
 			} else if m.state == viewSettings {
@@ -1211,6 +1469,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.bodyScrollPos < 0 {
 					m.bodyScrollPos = 0
 				}
+				return m, nil
+			}
+			// Clear search filter in list views
+			if m.searchQuery != "" && (m.state == viewEmails || m.state == viewCalendar || m.state == viewContacts) {
+				m.searchQuery = ""
+				m.searchInput.SetValue("")
+				m.emailCursor = 0
+				m.emailOffset = 0
+				m.eventCursor = 0
+				m.contactCursor = 0
+				m.contactOffset = 0
 				return m, nil
 			}
 
@@ -1247,6 +1516,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, fetchMailboxesOfflineCmd(m.db)
 					}
 					return m, fetchMailboxesCmd(m.client, m.db)
+				} else if selectedItem.State == viewSearch {
+					// Enter search mode
+					if m.offlineMode || m.client == nil {
+						m.err = fmt.Errorf("search requires online mode")
+						m.state = viewMainMenu
+						return m, nil
+					}
+					m.searchActive = true
+					m.searchResults = nil
+					m.searchCursor = 0
+					m.searchInput.SetValue("")
+					m.searchInput.Focus()
+					return m, textinput.Blink
 				} else if selectedItem.State == viewCalendar && !m.offlineMode && m.client != nil && m.davClient != nil {
 					m.loading = true
 					if len(m.calendars) == 0 {
@@ -1267,6 +1549,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if selectedItem.State == viewContacts && !m.offlineMode && m.client != nil && m.davClient != nil {
 					m.loading = true
 					m.contactCursor = 0
+				m.contactOffset = 0
 					if len(m.addressBooks) == 0 {
 						return m, fetchAddressBooksCmd(m.davClient)
 					}
@@ -1279,7 +1562,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								break
 							}
 						}
-						return m, fetchContactsCmd(m.davClient, defaultAB, 100)
+						return m, fetchContactsCmd(m.davClient, defaultAB, 500)
 					}
 					m.loading = false
 				}
@@ -1305,6 +1588,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.offlineMode || m.client == nil {
 					return m, fetchEmailBodyOfflineCmd(m.db, selectedEmail.ID)
 				}
+				return m, fetchEmailBodyCmd(m.client, m.db, selectedEmail.ID)
+			} else if m.state == viewSearch && !m.searchActive && len(m.searchResults) > 0 {
+				// View search result email
+				m.state = viewBody
+				m.loading = true
+				m.bodyScrollPos = 0
+				selectedEmail := m.searchResults[m.searchCursor]
+				// Temporarily set emails so body view can reference it
+				m.emails = m.searchResults
+				m.emailCursor = m.searchCursor
 				return m, fetchEmailBodyCmd(m.client, m.db, selectedEmail.ID)
 			} else if m.state == viewCalendar && !m.viewEventDetail && m.editingEvent == nil && len(m.events) > 0 {
 				// View event details
@@ -1363,6 +1656,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = viewMainMenu
 				}
 				return m, nil
+			} else if m.state == viewSearch {
+				m.state = viewMainMenu
+				m.searchResults = nil
+				m.searchQuery = ""
+				return m, nil
 			} else if m.state == viewSettings {
 				m.state = viewMainMenu
 				return m, nil
@@ -1398,7 +1696,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.addressBookCursor < len(m.addressBooks) {
 					abID = m.addressBooks[m.addressBookCursor].ID
 				}
-				return m, fetchContactsCmd(m.davClient, abID, 100)
+				return m, fetchContactsCmd(m.davClient, abID, 500)
+			}
+
+		// Search (available in list views)
+		case "/":
+			if m.state == viewEmails {
+				m.searchActive = true
+				m.searchInput.Focus()
+				return m, textinput.Blink
+			} else if m.state == viewCalendar && !m.viewEventDetail && m.editingEvent == nil {
+				m.searchActive = true
+				m.searchInput.Focus()
+				return m, textinput.Blink
+			} else if m.state == viewContacts && !m.viewContactDetail && m.editingContact == nil {
+				m.searchActive = true
+				m.searchInput.Focus()
+				return m, textinput.Blink
+			} else if m.state == viewSearch && !m.searchActive {
+				// Activate search input in search view
+				m.searchActive = true
+				m.searchInput.SetValue("")
+				m.searchInput.Focus()
+				return m, textinput.Blink
 			}
 
 		// Calendar-specific keys
@@ -1535,7 +1855,80 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// filterContacts returns contacts matching the search query
+// filterEmails returns emails matching the search query
+func filterEmails(emails []model.Email, query string) []model.Email {
+	if query == "" {
+		return emails
+	}
+	query = strings.ToLower(query)
+	var matches []model.Email
+	for _, e := range emails {
+		// Match against subject, from, to, or preview
+		if strings.Contains(strings.ToLower(e.Subject), query) ||
+			strings.Contains(strings.ToLower(e.From), query) ||
+			strings.Contains(strings.ToLower(e.To), query) ||
+			strings.Contains(strings.ToLower(e.Preview), query) {
+			matches = append(matches, e)
+		}
+	}
+	return matches
+}
+
+// filterEvents returns events matching the search query
+func filterEvents(events []model.CalendarEvent, query string) []model.CalendarEvent {
+	if query == "" {
+		return events
+	}
+	query = strings.ToLower(query)
+	var matches []model.CalendarEvent
+	for _, e := range events {
+		// Match against title, description, or location
+		if strings.Contains(strings.ToLower(e.Title), query) ||
+			strings.Contains(strings.ToLower(e.Description), query) ||
+			strings.Contains(strings.ToLower(e.Location), query) {
+			matches = append(matches, e)
+		}
+	}
+	return matches
+}
+
+// filterContactsAll returns all contacts matching the search query (no limit)
+func filterContactsAll(contacts []model.Contact, query string) []model.Contact {
+	if query == "" {
+		return contacts
+	}
+	query = strings.ToLower(query)
+	var matches []model.Contact
+	for _, c := range contacts {
+		// Match against name, email, company, or phone
+		if strings.Contains(strings.ToLower(c.FullName), query) ||
+			strings.Contains(strings.ToLower(c.Company), query) ||
+			strings.Contains(strings.ToLower(c.Notes), query) {
+			matches = append(matches, c)
+			continue
+		}
+		matched := false
+		for _, e := range c.Emails {
+			if strings.Contains(strings.ToLower(e.Email), query) {
+				matches = append(matches, c)
+				matched = true
+				break
+			}
+		}
+		if matched {
+			continue
+		}
+		for _, p := range c.Phones {
+			if strings.Contains(p.Number, query) {
+				matches = append(matches, c)
+				break
+			}
+		}
+	}
+	return matches
+}
+
+// filterContacts returns contacts matching the search query (limited for autocomplete)
 func filterContacts(contacts []model.Contact, query string) []model.Contact {
 	if query == "" {
 		return nil
@@ -1835,84 +2228,185 @@ func renderEmailBody(textBody, htmlBody string, width int) string {
 	return "(No content)"
 }
 
+// wrapText wraps text to fit within maxWidth characters
+func wrapText(text string, maxWidth int) string {
+	if len(text) <= maxWidth {
+		return text
+	}
+	
+	var result strings.Builder
+	words := strings.Fields(text)
+	lineLen := 0
+	
+	for i, word := range words {
+		wordLen := len(word)
+		if lineLen > 0 && lineLen+wordLen+1 > maxWidth {
+			result.WriteString("\n")
+			lineLen = 0
+		}
+		if lineLen > 0 {
+			result.WriteString(" ")
+			lineLen++
+		}
+		result.WriteString(word)
+		lineLen += wordLen
+		
+		// Handle very long words
+		if wordLen > maxWidth && i < len(words)-1 {
+			result.WriteString("\n")
+			lineLen = 0
+		}
+	}
+	
+	return result.String()
+}
+
 func (m Model) View() string {
 	if m.err != nil {
-		return fmt.Sprintf("Error: %v\n\nPress any key to continue...", m.err)
+		// Wrap error message to terminal width
+		errMsg := fmt.Sprintf("Error: %v", m.err)
+		maxWidth := m.width - 4 // Leave some margin
+		if maxWidth < 40 {
+			maxWidth = 40
+		}
+		
+		wrapped := wrapText(errMsg, maxWidth)
+		return wrapped + "\n\nPress any key to continue..."
 	}
 
 	s := strings.Builder{}
-	s.WriteString(titleStyle.Render("FM-CLI"))
-	s.WriteString(" ")
-
+	
+	// Header with app title
+	header := titleStyle.Render(" ✉ FM-CLI ")
+	s.WriteString(header)
+	
 	// Show offline indicator
 	if m.offlineMode {
-		s.WriteString("[OFFLINE] ")
+		s.WriteString(" " + errorBadgeStyle.Render("OFFLINE"))
 	}
+	s.WriteString("\n")
 
 	// Breadcrumbs based on state
+	breadcrumb := ""
 	switch m.state {
 	case viewMailboxes, viewEmails, viewBody, viewComposeTo, viewComposeSubject, viewComposeConfirm:
-		s.WriteString("> Mail")
+		breadcrumb = "Mail"
 		if (m.state == viewEmails || m.state == viewBody) && len(m.mailboxes) > 0 {
 			mb := m.mailboxes[m.mbCursor]
-			s.WriteString(fmt.Sprintf(" > %s", mb.Name))
+			breadcrumb += fmt.Sprintf(" › %s", mb.Name)
 		}
+	case viewSearch:
+		breadcrumb = "Search"
 	case viewCalendar:
-		s.WriteString("> Calendar")
+		breadcrumb = "Calendar"
 	case viewContacts:
-		s.WriteString("> Contacts")
+		breadcrumb = "Contacts"
 	case viewSettings:
-		s.WriteString("> Settings")
+		breadcrumb = "Settings"
 	}
-	s.WriteString("\n\n")
+	if breadcrumb != "" {
+		s.WriteString(breadcrumbStyle.Render("  "+breadcrumb) + "\n")
+	}
+	s.WriteString("\n")
 
 	// Global shortcuts hint
 	if m.state != viewMainMenu && m.state != viewComposeTo && m.state != viewComposeSubject && m.state != viewComposeConfirm {
-		s.WriteString("(1: Mail  2: Calendar  3: Contacts  4: Settings  0: Menu)\n\n")
+		shortcuts := []string{
+			keyStyle.Render("1") + ":Mail",
+			keyStyle.Render("2") + ":Calendar",
+			keyStyle.Render("3") + ":Contacts",
+			keyStyle.Render("4") + ":Settings",
+			keyStyle.Render("0") + ":Menu",
+		}
+		s.WriteString(helpStyle.Render(strings.Join(shortcuts, "  ")) + "\n\n")
 	}
 
 	if m.state == viewMainMenu {
-		s.WriteString("Welcome to FM-CLI\n\n")
+		s.WriteString(subtitleStyle.Render("🏠 Main Menu") + "\n\n")
 		for i, item := range mainMenuItems {
-			cursor := " "
+			cursor := "  "
 			style := mailboxStyle
 			if i == m.menuCursor {
-				cursor = ">"
+				cursor = "▶ "
 				style = selectedMailboxStyle
 			}
-			label := fmt.Sprintf("%s [%s] %s", cursor, item.Shortcut, item.Name)
-			s.WriteString(style.Render(label) + "\n")
+			
+			// Icon for each menu item
+			icon := ""
+			switch item.State {
+			case viewMailboxes:
+				icon = "✉ "
+			case viewSearch:
+				icon = "🔍 "
+			case viewCalendar:
+				icon = "📅 "
+			case viewContacts:
+				icon = "👤 "
+			case viewSettings:
+				icon = "⚙ "
+			}
+			
+			label := fmt.Sprintf("%s%s %s", cursor, icon, item.Name)
+			shortcut := badgeStyle.Render(item.Shortcut)
+			s.WriteString(style.Render(label) + " " + shortcut + "\n")
 		}
-		s.WriteString("\n(j/k navigate, enter to select, q to quit)")
+		s.WriteString("\n" + helpStyle.Render("↑↓:navigate  ⏎:select  q:quit"))
 
 	} else if m.state == viewMailboxes {
+		s.WriteString(subtitleStyle.Render("📬 Mailboxes") + "\n\n")
 		if m.loading {
-			s.WriteString("Loading mailboxes...")
+			s.WriteString(statusStyle.Render(" Loading mailboxes... "))
 		} else if len(m.mailboxes) == 0 {
-			s.WriteString("No mailboxes found.")
+			s.WriteString(helpStyle.Render("No mailboxes found."))
 		}
 		for i, mb := range m.mailboxes {
-			cursor := " "
+			cursor := "  "
 			style := mailboxStyle
-
+			
 			if i == m.mbCursor {
-				cursor = ">"
+				cursor = "▶ "
 				style = selectedMailboxStyle
 			}
 
-			label := fmt.Sprintf("%s %s (%d)", cursor, mb.Name, mb.UnreadCount)
-			s.WriteString(style.Render(label) + "\n")
+			// Show unread count prominently
+			label := fmt.Sprintf("%s%s", cursor, mb.Name)
+			unreadBadge := ""
+			if mb.UnreadCount > 0 {
+				unreadBadge = " " + mailboxUnreadBadgeStyle.Render(fmt.Sprintf(" %d ", mb.UnreadCount))
+			} else {
+				unreadBadge = " " + statusStyle.Render(" 0 ")
+			}
+			
+			s.WriteString(style.Render(label) + unreadBadge + "\n")
 		}
-		s.WriteString("\n(j/k navigate, enter/l open, r: refresh, c: compose)")
+		s.WriteString("\n" + helpStyle.Render("↑↓:navigate  ⏎:open  "+keyStyle.Render("r")+":refresh  "+keyStyle.Render("c")+":compose"))
 
 	} else if m.state == viewEmails {
+		// Show search bar if active or filter is set
+		if m.searchActive {
+			s.WriteString(inputFocusedStyle.Render(m.searchInput.View()) + "\n\n")
+		} else if m.searchQuery != "" {
+			filter := badgeStyle.Render("Filter: " + m.searchQuery)
+			s.WriteString(filter + " " + helpStyle.Render("(Ctrl+U:clear  /:edit)") + "\n\n")
+		}
+
+		// Apply filter
+		displayEmails := filterEmails(m.emails, m.searchQuery)
+
 		if m.loading {
-			s.WriteString("Loading emails using JMAP...\n")
-		} else if len(m.emails) == 0 {
-			s.WriteString("No emails found.")
+			s.WriteString(statusStyle.Render(" Loading emails... "))
+		} else if len(displayEmails) == 0 {
+			if m.searchQuery != "" {
+				s.WriteString(helpStyle.Render("No emails match the filter."))
+			} else {
+				s.WriteString(helpStyle.Render("No emails found."))
+			}
 		} else {
 			// Basic Render Loop for Emails
-			headerHeight := 5
+			headerHeight := 7
+			if m.searchActive || m.searchQuery != "" {
+				headerHeight += 2
+			}
 			footerHeight := 2
 			pageHeight := m.height - headerHeight - footerHeight
 			if pageHeight < 5 {
@@ -1921,38 +2415,72 @@ func (m Model) View() string {
 
 			start := m.emailOffset
 			end := start + pageHeight
-			if end > len(m.emails) {
-				end = len(m.emails)
+			if end > len(displayEmails) {
+				end = len(displayEmails)
 			}
 
 			for i := start; i < end; i++ {
-				e := m.emails[i]
+				e := displayEmails[i]
 				style := emailItemStyle
+				cursor := "  "
 				if i == m.emailCursor {
 					style = selectedEmailItemStyle
+					cursor = "▶ "
 				}
 
-				unreadMarker := " "
+				// Unread/read indicator
+				indicator := ""
+				textStyle := readStyle
 				if e.IsUnread {
-					unreadMarker = "*"
+					indicator = "● "
+					textStyle = unreadStyle
 				}
 				
-				flagMarker := " "
+				// Flag indicator
+				flagMarker := ""
 				if e.IsFlagged {
-					flagMarker = "!"
+					flagMarker = "⭐ "
 				}
 
-				// Format: * ! [Date] From: Subject
-				line := fmt.Sprintf("%s%s [%s] %-20s %s", unreadMarker, flagMarker, e.Date, e.From, e.Subject)
+				// From sender (truncate if needed)
+				fromStr := e.From
+				if len(fromStr) > 25 {
+					fromStr = fromStr[:22] + "..."
+				}
+				fromStr = emailFromStyle.Render(fromStr)
+				
+				// Subject
+				subjectStr := e.Subject
+				if len(subjectStr) > 50 {
+					subjectStr = subjectStr[:47] + "..."
+				}
+				subjectStr = emailSubjectStyle.Render(subjectStr)
 
+				// Build line with date and content
+				line := fmt.Sprintf("%s%s%s%-28s %s", cursor, indicator, flagMarker, fromStr, subjectStr)
+				
+				// Apply unread/read styling to the whole line
 				if e.IsUnread {
-					line = unreadStyle.Render(line)
+					line = textStyle.Render(line)
 				}
 
 				s.WriteString(style.Render(line) + "\n")
 			}
 		}
-		s.WriteString("\n(h/esc back, j/k navigate, r: refresh, u: read/unread, f: flag, e: archive, d: delete, c: compose)")
+		
+		// Help text at bottom
+		help := []string{
+			keyStyle.Render("h/esc") + ":back",
+			keyStyle.Render("↑↓") + ":navigate",
+			keyStyle.Render("/") + ":search",
+			keyStyle.Render("r") + ":refresh",
+			keyStyle.Render("u") + ":read/unread",
+			keyStyle.Render("f") + ":flag",
+			keyStyle.Render("e") + ":archive",
+			keyStyle.Render("d") + ":delete",
+			keyStyle.Render("c") + ":compose",
+		}
+		s.WriteString("\n" + helpStyle.Render(strings.Join(help, "  ")))
 	
 	} else if m.state == viewBody {
 		if m.loading {
@@ -2108,130 +2636,196 @@ func (m Model) View() string {
 		}
 
 	} else if m.state == viewCalendar {
-		s.WriteString("Calendar - Agenda View\n\n")
+		s.WriteString(subtitleStyle.Render("📅 Calendar - Agenda") + "\n\n")
+		
+		// Show search bar if active or filter is set
+		if m.searchActive {
+			s.WriteString(inputFocusedStyle.Render(m.searchInput.View()) + "\n\n")
+		} else if m.searchQuery != "" {
+			filter := badgeStyle.Render("Filter: " + m.searchQuery)
+			s.WriteString(filter + " " + helpStyle.Render("(Ctrl+U:clear  /:edit)") + "\n\n")
+		}
+
+		// Apply filter
+		displayEvents := filterEvents(m.events, m.searchQuery)
 		
 		if m.loading {
-			s.WriteString("Loading calendar...")
+			s.WriteString(statusStyle.Render(" Loading calendar... "))
 		} else if m.editingEvent != nil {
 			// Editing/Creating event
-			if m.editingEvent.ID == "" {
-				s.WriteString("Create New Event\n\n")
-			} else {
-				s.WriteString("Edit Event\n\n")
+			title := "✨ Create New Event"
+			if m.editingEvent.ID != "" {
+				title = "✏️  Edit Event"
 			}
-			s.WriteString(fmt.Sprintf("Title: %s\n", m.eventInput.View()))
-			s.WriteString(fmt.Sprintf("Date: %s\n", m.editingEvent.Start.Format("2006-01-02")))
-			s.WriteString(fmt.Sprintf("Time: %s\n", m.editingEvent.Start.Format("15:04")))
+			s.WriteString(subtitleStyle.Render(title) + "\n\n")
+			
+			s.WriteString(contactFieldLabelStyle.Render("Title: ") + inputFocusedStyle.Render(m.eventInput.View()) + "\n")
+			s.WriteString(contactFieldLabelStyle.Render("Date: ") + contactFieldValueStyle.Render(m.editingEvent.Start.Format("2006-01-02")) + "\n")
+			s.WriteString(contactFieldLabelStyle.Render("Time: ") + contactFieldValueStyle.Render(m.editingEvent.Start.Format("15:04")) + "\n")
 			if m.editingEvent.Duration != "" {
-				s.WriteString(fmt.Sprintf("Duration: %s\n", m.editingEvent.Duration))
+				s.WriteString(contactFieldLabelStyle.Render("Duration: ") + contactFieldValueStyle.Render(m.editingEvent.Duration) + "\n")
 			}
-			s.WriteString(fmt.Sprintf("Location: %s\n", m.editingEvent.Location))
-			s.WriteString("\n(enter: save, esc: cancel)")
+			if m.editingEvent.Location != "" {
+				s.WriteString(contactFieldLabelStyle.Render("Location: ") + contactFieldValueStyle.Render(m.editingEvent.Location) + "\n")
+			}
+			s.WriteString("\n" + helpStyle.Render("⏎:save  esc:cancel"))
 		} else if m.viewEventDetail && m.eventCursor < len(m.events) {
 			// Viewing event details
 			e := m.events[m.eventCursor]
-			s.WriteString(fmt.Sprintf("Title: %s\n\n", e.Title))
-			s.WriteString(fmt.Sprintf("Date: %s\n", e.Start.Format("Monday, January 2, 2006")))
+			
+			// Title with box
+			titleBox := boxStyle.Render(eventTitleStyle.Render(e.Title))
+			s.WriteString(titleBox + "\n\n")
+			
+			s.WriteString(contactFieldLabelStyle.Render("📅 Date: ") + contactFieldValueStyle.Render(e.Start.Format("Monday, January 2, 2006")) + "\n")
 			if e.IsAllDay {
-				s.WriteString("Time: All Day\n")
+				s.WriteString(contactFieldLabelStyle.Render("🕐 Time: ") + badgeStyle.Render("All Day") + "\n")
 			} else {
-				s.WriteString(fmt.Sprintf("Time: %s - %s\n", e.Start.Format("15:04"), e.End.Format("15:04")))
+				timeStr := fmt.Sprintf("%s - %s", e.Start.Format("15:04"), e.End.Format("15:04"))
+				s.WriteString(contactFieldLabelStyle.Render("🕐 Time: ") + eventTimeStyle.Render(timeStr) + "\n")
 			}
 			if e.Location != "" {
-				s.WriteString(fmt.Sprintf("Location: %s\n", e.Location))
+				s.WriteString(contactFieldLabelStyle.Render("📍 Location: ") + contactFieldValueStyle.Render(e.Location) + "\n")
 			}
 			if e.Description != "" {
-				s.WriteString(fmt.Sprintf("\nDescription:\n%s\n", e.Description))
+				s.WriteString("\n" + contactFieldLabelStyle.Render("Description:") + "\n")
+				s.WriteString(boxStyle.Render(e.Description) + "\n")
 			}
 			if len(e.Participants) > 0 {
-				s.WriteString("\nParticipants:\n")
+				s.WriteString("\n" + contactFieldLabelStyle.Render("👥 Participants:") + "\n")
 				for _, p := range e.Participants {
 					status := ""
 					if p.Status != "" {
-						status = fmt.Sprintf(" (%s)", p.Status)
+						statusBadge := badgeStyle.Render(p.Status)
+						status = " " + statusBadge
 					}
-					s.WriteString(fmt.Sprintf("  - %s <%s>%s\n", p.Name, p.Email, status))
+					s.WriteString(fmt.Sprintf("  • %s ", contactNameStyle.Render(p.Name)) + contactEmailStyle.Render("<"+p.Email+">") + status + "\n")
 				}
 			}
-			s.WriteString("\n(e: edit, d: delete, esc: back)")
-		} else if len(m.events) == 0 && len(m.calendars) > 0 {
-			s.WriteString("No events in the next " + fmt.Sprintf("%d", m.agendaDays) + " days.\n")
-			s.WriteString("\n(n: new event, r: refresh, esc: back)")
+			s.WriteString("\n" + helpStyle.Render(keyStyle.Render("e")+":edit  "+keyStyle.Render("d")+":delete  "+keyStyle.Render("esc")+":back"))
+		} else if len(displayEvents) == 0 && len(m.calendars) > 0 {
+			if m.searchQuery != "" {
+				s.WriteString(helpStyle.Render("No events match the filter.") + "\n")
+				s.WriteString("\n" + helpStyle.Render("Ctrl+U:clear filter  "+keyStyle.Render("n")+":new event  "+keyStyle.Render("r")+":refresh"))
+			} else {
+				s.WriteString(helpStyle.Render(fmt.Sprintf("No events in the next %d days.", m.agendaDays)) + "\n")
+				s.WriteString("\n" + helpStyle.Render(keyStyle.Render("n")+":new event  "+keyStyle.Render("r")+":refresh  "+keyStyle.Render("esc")+":back"))
+			}
 		} else if len(m.calendars) == 0 {
 			if m.offlineMode {
-				s.WriteString("Calendar is not available in offline mode.\n")
+				s.WriteString(errorBadgeStyle.Render(" OFFLINE ") + " " + helpStyle.Render("Calendar is not available in offline mode.") + "\n")
 			} else if m.davClient == nil {
-				s.WriteString("Calendar requires an app password to be configured.\n")
-				s.WriteString("Set FM_APP_PASSWORD environment variable.\n")
+				s.WriteString(lipgloss.NewStyle().Foreground(warningColor).Render("⚠ Calendar requires an app password to be configured.") + "\n")
+				s.WriteString(helpStyle.Render("Set FM_APP_PASSWORD environment variable.") + "\n")
 			} else {
-				s.WriteString("No calendars found. Make sure you have calendars in Fastmail.\n")
+				s.WriteString(helpStyle.Render("No calendars found. Make sure you have calendars in Fastmail.") + "\n")
 			}
-			s.WriteString("\n(r: refresh, esc: back)")
+			s.WriteString("\n" + helpStyle.Render(keyStyle.Render("r")+":refresh  "+keyStyle.Render("esc")+":back"))
 		} else {
 			// Agenda view
 			today := time.Now().Truncate(24 * time.Hour)
 			currentDate := time.Time{}
 			
-			for i, e := range m.events {
+			// Find the actual cursor position in filtered list
+			cursorInFiltered := -1
+			if m.eventCursor < len(m.events) {
+				targetEvent := m.events[m.eventCursor]
+				for idx, e := range displayEvents {
+					if e.ID == targetEvent.ID {
+						cursorInFiltered = idx
+						break
+					}
+				}
+			}
+			
+			for i, e := range displayEvents {
 				eventDate := e.Start.Truncate(24 * time.Hour)
 				
 				// Print date header if new day
 				if eventDate != currentDate {
 					currentDate = eventDate
+					s.WriteString("\n")
+					
 					dateStr := eventDate.Format("Monday, January 2")
+					dateStyle := eventDateHeaderStyle
 					if eventDate.Equal(today) {
-						dateStr += " (Today)"
+						dateStr += " TODAY"
+						dateStyle = todayBadgeStyle
 					} else if eventDate.Equal(today.AddDate(0, 0, 1)) {
-						dateStr += " (Tomorrow)"
+						dateStr += " Tomorrow"
 					}
-					s.WriteString("\n" + dateStr + "\n")
-					s.WriteString(strings.Repeat("-", len(dateStr)) + "\n")
+					s.WriteString(dateStyle.Render(" " + dateStr + " ") + "\n")
 				}
 				
 				// Event line
-				cursor := " "
+				cursor := "  "
 				style := emailItemStyle
-				if i == m.eventCursor {
-					cursor = ">"
+				
+				// Check if this is the selected event
+				if i == cursorInFiltered {
+					cursor = "▶ "
 					style = selectedEmailItemStyle
 				}
 				
 				timeStr := e.Start.Format("15:04")
+				timeBadge := eventTimeStyle.Render(timeStr)
 				if e.IsAllDay {
-					timeStr = "All Day"
+					timeBadge = badgeStyle.Render("All Day")
 				}
 				
-				line := fmt.Sprintf("%s %s  %s", cursor, timeStr, e.Title)
+				titleStr := eventTitleStyle.Render(e.Title)
+				line := fmt.Sprintf("%s%s  %s", cursor, timeBadge, titleStr)
 				if e.Location != "" {
-					line += fmt.Sprintf(" @ %s", e.Location)
+					line += "  " + contactFieldLabelStyle.Render("@") + " " + contactEmailStyle.Render(e.Location)
 				}
 				s.WriteString(style.Render(line) + "\n")
 			}
-			s.WriteString("\n(j/k navigate, enter: view, n: new, d: delete, r: refresh)")
+			
+			help := []string{
+				keyStyle.Render("↑↓") + ":navigate",
+				keyStyle.Render("⏎") + ":view",
+				keyStyle.Render("/") + ":search",
+				keyStyle.Render("n") + ":new",
+				keyStyle.Render("d") + ":delete",
+				keyStyle.Render("r") + ":refresh",
+			}
+			s.WriteString("\n" + helpStyle.Render(strings.Join(help, "  ")))
 		}
 
 	} else if m.state == viewContacts {
-		s.WriteString("Contacts\n\n")
+		s.WriteString(subtitleStyle.Render("👤 Contacts") + "\n\n")
+		
+		// Show search bar if active or filter is set
+		if m.searchActive {
+			s.WriteString(inputFocusedStyle.Render(m.searchInput.View()) + "\n\n")
+		} else if m.searchQuery != "" {
+			filter := badgeStyle.Render("Filter: " + m.searchQuery)
+			s.WriteString(filter + " " + helpStyle.Render("(Ctrl+U:clear  /:edit)") + "\n\n")
+		}
+
+		// Apply filter
+		displayContacts := filterContactsAll(m.contacts, m.searchQuery)
 		
 		if m.loading {
-			s.WriteString("Loading contacts...")
+			s.WriteString(statusStyle.Render(" Loading contacts... "))
 		} else if m.editingContact != nil {
 			// Editing/Creating contact
-			if m.editingContact.ID == "" {
-				s.WriteString("Create New Contact\n\n")
-			} else {
-				s.WriteString("Edit Contact\n\n")
+			title := "✨ Create New Contact"
+			if m.editingContact.ID != "" {
+				title = "✏️  Edit Contact"
 			}
+			s.WriteString(subtitleStyle.Render(title) + "\n\n")
 			
 			fields := []struct {
 				label string
 				value string
+				icon  string
 			}{
-				{"Full Name", m.editingContact.FullName},
-				{"Email", ""},
-				{"Phone", ""},
-				{"Company", m.editingContact.Company},
-				{"Notes", m.editingContact.Notes},
+				{"Full Name", m.editingContact.FullName, "👤"},
+				{"Email", "", "✉️"},
+				{"Phone", "", "📞"},
+				{"Company", m.editingContact.Company, "🏢"},
+				{"Notes", m.editingContact.Notes, "📝"},
 			}
 			if len(m.editingContact.Emails) > 0 {
 				fields[1].value = m.editingContact.Emails[0].Email
@@ -2241,115 +2835,236 @@ func (m Model) View() string {
 			}
 			
 			for i, f := range fields {
-				marker := " "
+				cursor := "  "
 				if i == m.contactEditField {
-					marker = ">"
-					s.WriteString(fmt.Sprintf("%s %s: %s\n", marker, f.label, m.contactInput.View()))
+					cursor = "▶ "
+					label := contactFieldLabelStyle.Render(f.icon + " " + f.label + ": ")
+					s.WriteString(cursor + label + inputFocusedStyle.Render(m.contactInput.View()) + "\n")
 				} else {
-					s.WriteString(fmt.Sprintf("%s %s: %s\n", marker, f.label, f.value))
+					label := contactFieldLabelStyle.Render(f.icon + " " + f.label + ": ")
+					value := contactFieldValueStyle.Render(f.value)
+					s.WriteString(cursor + label + value + "\n")
 				}
 			}
-			s.WriteString("\n(tab: next field, enter: save, esc: cancel)")
+			s.WriteString("\n" + helpStyle.Render("tab:next field  ⏎:save  esc:cancel"))
 		} else if m.viewContactDetail && m.contactCursor < len(m.contacts) {
 			// Viewing contact details
 			c := m.contacts[m.contactCursor]
-			s.WriteString(fmt.Sprintf("Name: %s\n\n", c.FullName))
+			
+			// Name with box
+			nameBox := boxStyle.Render(contactNameStyle.Render(c.FullName))
+			s.WriteString(nameBox + "\n\n")
+			
 			if c.Nickname != "" {
-				s.WriteString(fmt.Sprintf("Nickname: %s\n", c.Nickname))
+				s.WriteString(contactFieldLabelStyle.Render("Nickname: ") + contactFieldValueStyle.Render(c.Nickname) + "\n")
 			}
 			if c.Company != "" || c.JobTitle != "" {
-				s.WriteString(fmt.Sprintf("Work: %s - %s\n", c.Company, c.JobTitle))
+				workInfo := c.Company
+				if c.JobTitle != "" {
+					if workInfo != "" {
+						workInfo += " - "
+					}
+					workInfo += c.JobTitle
+				}
+				s.WriteString(contactFieldLabelStyle.Render("🏢 Work: ") + contactFieldValueStyle.Render(workInfo) + "\n")
 			}
 			
 			if len(c.Emails) > 0 {
-				s.WriteString("\nEmails:\n")
+				s.WriteString("\n" + contactFieldLabelStyle.Render("✉️  Emails:") + "\n")
 				for _, e := range c.Emails {
-					s.WriteString(fmt.Sprintf("  %s: %s\n", e.Type, e.Email))
+					typeLabel := badgeStyle.Render(e.Type)
+					email := contactEmailStyle.Render(e.Email)
+					s.WriteString(fmt.Sprintf("  %s %s\n", typeLabel, email))
 				}
 			}
 			
 			if len(c.Phones) > 0 {
-				s.WriteString("\nPhones:\n")
+				s.WriteString("\n" + contactFieldLabelStyle.Render("📞 Phones:") + "\n")
 				for _, p := range c.Phones {
-					s.WriteString(fmt.Sprintf("  %s: %s\n", p.Type, p.Number))
+					typeLabel := badgeStyle.Render(p.Type)
+					phone := contactFieldValueStyle.Render(p.Number)
+					s.WriteString(fmt.Sprintf("  %s %s\n", typeLabel, phone))
 				}
 			}
 			
 			if len(c.Addresses) > 0 {
-				s.WriteString("\nAddresses:\n")
+				s.WriteString("\n" + contactFieldLabelStyle.Render("📍 Addresses:") + "\n")
 				for _, a := range c.Addresses {
 					addr := strings.Join([]string{a.Street, a.City, a.State, a.PostalCode, a.Country}, ", ")
 					addr = strings.Trim(strings.ReplaceAll(addr, ", , ", ", "), ", ")
-					s.WriteString(fmt.Sprintf("  %s: %s\n", a.Type, addr))
+					typeLabel := badgeStyle.Render(a.Type)
+					s.WriteString(fmt.Sprintf("  %s %s\n", typeLabel, contactFieldValueStyle.Render(addr)))
 				}
 			}
 			
 			if c.Birthday != "" {
-				s.WriteString(fmt.Sprintf("\nBirthday: %s\n", c.Birthday))
+				s.WriteString("\n" + contactFieldLabelStyle.Render("🎂 Birthday: ") + contactFieldValueStyle.Render(c.Birthday) + "\n")
 			}
 			
 			if c.Notes != "" {
-				s.WriteString(fmt.Sprintf("\nNotes:\n%s\n", c.Notes))
+				s.WriteString("\n" + contactFieldLabelStyle.Render("📝 Notes:") + "\n")
+				s.WriteString(boxStyle.Render(c.Notes) + "\n")
 			}
-			s.WriteString("\n(e: edit, d: delete, esc: back)")
-		} else if len(m.contacts) == 0 && len(m.addressBooks) > 0 {
-			s.WriteString("No contacts found.\n")
-			s.WriteString("\n(n: new contact, r: refresh, esc: back)")
+			s.WriteString("\n" + helpStyle.Render(keyStyle.Render("e")+":edit  "+keyStyle.Render("d")+":delete  "+keyStyle.Render("esc")+":back"))
+		} else if len(displayContacts) == 0 && len(m.addressBooks) > 0 {
+			if m.searchQuery != "" {
+				s.WriteString(helpStyle.Render("No contacts match the filter.") + "\n")
+				s.WriteString("\n" + helpStyle.Render("Ctrl+U:clear filter  "+keyStyle.Render("n")+":new  "+keyStyle.Render("r")+":refresh"))
+			} else {
+				s.WriteString(helpStyle.Render("No contacts found.") + "\n")
+				s.WriteString("\n" + helpStyle.Render(keyStyle.Render("n")+":new contact  "+keyStyle.Render("r")+":refresh  "+keyStyle.Render("esc")+":back"))
+			}
 		} else if len(m.addressBooks) == 0 {
 			if m.offlineMode {
-				s.WriteString("Contacts are not available in offline mode.\n")
+				s.WriteString(errorBadgeStyle.Render(" OFFLINE ") + " " + helpStyle.Render("Contacts are not available in offline mode.") + "\n")
 			} else if m.davClient == nil {
-				s.WriteString("Contacts require an app password to be configured.\n")
-				s.WriteString("Set FM_APP_PASSWORD environment variable.\n")
+				s.WriteString(lipgloss.NewStyle().Foreground(warningColor).Render("⚠ Contacts require an app password to be configured.") + "\n")
+				s.WriteString(helpStyle.Render("Set FM_APP_PASSWORD environment variable.") + "\n")
 			} else {
-				s.WriteString("No address books found.\n")
+				s.WriteString(helpStyle.Render("No address books found.") + "\n")
 			}
-			s.WriteString("\n(r: refresh, esc: back)")
+			s.WriteString("\n" + helpStyle.Render(keyStyle.Render("r")+":refresh  "+keyStyle.Render("esc")+":back"))
 		} else {
-			// Contact list with count
-			s.WriteString(fmt.Sprintf("Showing %d contacts\n\n", len(m.contacts)))
+			// Contact list - use filtered contacts if search is active
+			contactsToShow := m.contacts
+			if m.searchQuery != "" {
+				contactsToShow = displayContacts
+			}
 			
-			// Calculate visible window
-			headerHeight := 4
+			// Calculate visible window - be very conservative
+			pageHeight := 10  // Default to 10 items
+			if m.height > 15 {
+				pageHeight = m.height - 12  // Reserve space for header/footer
+			}
+			if pageHeight < 5 {
+				pageHeight = 5
+			}
+			if pageHeight > 20 {
+				pageHeight = 20  // Cap at 20 items max
+			}
+			
+			// Reset offset if it's beyond the list
+			if m.contactOffset >= len(contactsToShow) {
+				m.contactOffset = 0
+			}
+			
+			// Use simple offset-based scrolling
+			start := m.contactOffset
+			end := start + pageHeight
+			if end > len(contactsToShow) {
+				end = len(contactsToShow)
+			}
+			
+			// Show position indicator
+			if m.searchQuery != "" {
+				s.WriteString(fmt.Sprintf("Showing %d-%d of %d (filtered from %d)\n\n", start+1, end, len(contactsToShow), len(m.contacts)))
+			} else {
+				s.WriteString(fmt.Sprintf("Showing %d-%d of %d\n\n", start+1, end, len(contactsToShow)))
+			}
+			
+			for i := start; i < end; i++ {
+				c := contactsToShow[i]
+				
+				// Format: Name <email> | phone
+				name := c.FullName
+				if name == "" {
+					name = "(No name)"
+				}
+				
+				var line string
+				if i == m.contactCursor {
+					// Selected - use plain text so background color shows through
+					line = "▶ " + name
+					if len(c.Emails) > 0 {
+						line += "  " + c.Emails[0].Email
+					}
+					if len(c.Phones) > 0 {
+						line += "  📞 " + c.Phones[0].Number
+					}
+					s.WriteString(selectedEmailItemStyle.Render(line) + "\n")
+				} else {
+					// Not selected - use colored styles
+					line = "  " + contactNameStyle.Render(name)
+					if len(c.Emails) > 0 {
+						line += "  " + contactEmailStyle.Render(c.Emails[0].Email)
+					}
+					if len(c.Phones) > 0 {
+						line += "  📞 " + contactFieldValueStyle.Render(c.Phones[0].Number)
+					}
+					s.WriteString(emailItemStyle.Render(line) + "\n")
+				}
+			}
+			
+			help := []string{
+				keyStyle.Render("↑↓") + ":navigate",
+				keyStyle.Render("⏎") + ":view",
+				keyStyle.Render("/") + ":search",
+				keyStyle.Render("n") + ":new",
+				keyStyle.Render("d") + ":delete",
+				keyStyle.Render("r") + ":refresh",
+			}
+			s.WriteString("\n" + helpStyle.Render(strings.Join(help, "  ")))
+		}
+
+	} else if m.state == viewSearch {
+		s.WriteString("Search All Mail\n\n")
+		
+		// Show search input if active
+		if m.searchActive {
+			s.WriteString(m.searchInput.View() + "\n\n")
+			s.WriteString("(enter to search, esc to cancel)")
+		} else if m.loading {
+			s.WriteString(fmt.Sprintf("Searching for: %s...\n", m.searchQuery))
+		} else if m.searchQuery == "" {
+			s.WriteString("Press / to enter a search query\n")
+			s.WriteString("\n(/ to search, esc/0 to go back)")
+		} else if len(m.searchResults) == 0 {
+			s.WriteString(fmt.Sprintf("No results for: %s\n", m.searchQuery))
+			s.WriteString("\n(/ to search again, esc/0 to go back)")
+		} else {
+			s.WriteString(fmt.Sprintf("Results for: %s (%d found)\n\n", m.searchQuery, len(m.searchResults)))
+			
+			// Render search results like emails
+			headerHeight := 7
 			footerHeight := 2
 			pageHeight := m.height - headerHeight - footerHeight
 			if pageHeight < 5 {
-				pageHeight = 10
+				pageHeight = 5
 			}
-			
+
 			startIdx := 0
-			if m.contactCursor >= pageHeight {
-				startIdx = m.contactCursor - pageHeight + 1
+			if m.searchCursor >= pageHeight {
+				startIdx = m.searchCursor - pageHeight + 1
 			}
 			endIdx := startIdx + pageHeight
-			if endIdx > len(m.contacts) {
-				endIdx = len(m.contacts)
+			if endIdx > len(m.searchResults) {
+				endIdx = len(m.searchResults)
 			}
-			
+
 			for i := startIdx; i < endIdx; i++ {
-				c := m.contacts[i]
-				cursor := "  "
+				e := m.searchResults[i]
 				style := emailItemStyle
-				if i == m.contactCursor {
-					cursor = "> "
+				if i == m.searchCursor {
 					style = selectedEmailItemStyle
 				}
-				
-				// Format: Name <email> | phone
-				line := c.FullName
-				if line == "" {
-					line = "(No name)"
+
+				unreadMarker := " "
+				if e.IsUnread {
+					unreadMarker = "*"
 				}
-				if len(c.Emails) > 0 {
-					line += fmt.Sprintf("  <%s>", c.Emails[0].Email)
+
+				flagMarker := " "
+				if e.IsFlagged {
+					flagMarker = "!"
 				}
-				if len(c.Phones) > 0 {
-					line += fmt.Sprintf("  %s", c.Phones[0].Number)
+
+				line := fmt.Sprintf("%s%s [%s] %-20s %s", unreadMarker, flagMarker, e.Date, e.From, e.Subject)
+				if e.IsUnread {
+					line = unreadStyle.Render(line)
 				}
-				
-				s.WriteString(style.Render(cursor + line) + "\n")
+				s.WriteString(style.Render(line) + "\n")
 			}
-			s.WriteString("\n(j/k: navigate, enter: view, n: new, d: delete, r: refresh, esc: back)")
+			s.WriteString("\n(j/k: navigate, enter: view, /: new search, esc/0: back)")
 		}
 
 	} else if m.state == viewSettings {
@@ -2379,6 +3094,16 @@ func (m Model) View() string {
 }
 
 // Commands
+func searchEmailsCmd(client *api.Client, query string) tea.Cmd {
+	return func() tea.Msg {
+		results, err := client.SearchEmails(query, 50)
+		if err != nil {
+			return errorMsg(err)
+		}
+		return searchResultsMsg(results)
+	}
+}
+
 func saveDraftCmd(client *api.Client, draftID, from, to, subject, body string) tea.Cmd {
 	return func() tea.Msg {
 		err := client.SaveDraft(draftID, from, to, subject, body)

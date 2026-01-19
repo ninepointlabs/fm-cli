@@ -671,47 +671,69 @@ func (d *DAVClient) CreateContact(ctx context.Context, contact model.Contact) (s
 
 // UpdateContact updates an existing contact via CardDAV
 func (d *DAVClient) UpdateContact(ctx context.Context, contact model.Contact) error {
-	// Get existing card to preserve UID
+	// Get existing card to preserve all fields
 	objects, err := d.CardDAV.MultiGetAddressBook(ctx, contact.AddressBookID, &carddav.AddressBookMultiGet{
 		Paths: []string{contact.ID},
 		DataRequest: carddav.AddressDataRequest{
-			Props: []string{vcard.FieldUID},
+			AllProp: true, // Get all properties
 		},
 	})
-	if err != nil || len(objects) == 0 {
+	if err != nil {
 		return fmt.Errorf("failed to get existing contact: %w", err)
 	}
-
-	uid := ""
-	if uidField := objects[0].Card.Get(vcard.FieldUID); uidField != nil {
-		uid = uidField.Value
-	}
-	if uid == "" {
-		uid = fmt.Sprintf("%d@fm-cli", time.Now().UnixNano())
+	if len(objects) == 0 {
+		return fmt.Errorf("contact not found")
 	}
 
-	card := make(vcard.Card)
-	card.SetValue(vcard.FieldUID, uid)
-	card.SetValue(vcard.FieldFormattedName, contact.FullName)
-
-	if contact.FirstName != "" || contact.LastName != "" {
-		name := &vcard.Name{
-			FamilyName:      contact.LastName,
-			GivenName:       contact.FirstName,
-			HonorificPrefix: contact.Prefix,
-			HonorificSuffix: contact.Suffix,
-		}
-		card.AddName(name)
+	// Start with the existing card
+	card := objects[0].Card
+	
+	// Update the fields that can be edited
+	// FN (Formatted Name) is required
+	fn := contact.FullName
+	if fn == "" {
+		fn = strings.TrimSpace(contact.FirstName + " " + contact.LastName)
 	}
+	if fn == "" {
+		fn = "New Contact"
+	}
+	card.SetValue(vcard.FieldFormattedName, fn)
 
+	// Update N (Name) field - remove old one first
+	delete(card, vcard.FieldName)
+	name := &vcard.Name{
+		FamilyName:      contact.LastName,
+		GivenName:       contact.FirstName,
+		HonorificPrefix: contact.Prefix,
+		HonorificSuffix: contact.Suffix,
+	}
+	card.AddName(name)
+
+	// Update optional fields
 	if contact.Nickname != "" {
 		card.SetValue(vcard.FieldNickname, contact.Nickname)
+	} else {
+		delete(card, vcard.FieldNickname)
 	}
+	
 	if contact.Company != "" {
 		card.SetValue(vcard.FieldOrganization, contact.Company)
+	} else {
+		delete(card, vcard.FieldOrganization)
+	}
+	
+	if contact.JobTitle != "" {
+		card.SetValue(vcard.FieldTitle, contact.JobTitle)
+	} else {
+		delete(card, vcard.FieldTitle)
 	}
 
+	// Update emails - remove old ones first
+	delete(card, vcard.FieldEmail)
 	for _, email := range contact.Emails {
+		if email.Email == "" {
+			continue
+		}
 		field := &vcard.Field{
 			Value:  email.Email,
 			Params: make(vcard.Params),
@@ -722,7 +744,12 @@ func (d *DAVClient) UpdateContact(ctx context.Context, contact model.Contact) er
 		card.Add(vcard.FieldEmail, field)
 	}
 
+	// Update phones - remove old ones first
+	delete(card, vcard.FieldTelephone)
 	for _, phone := range contact.Phones {
+		if phone.Number == "" {
+			continue
+		}
 		field := &vcard.Field{
 			Value:  phone.Number,
 			Params: make(vcard.Params),
@@ -736,11 +763,19 @@ func (d *DAVClient) UpdateContact(ctx context.Context, contact model.Contact) er
 		card.Add(vcard.FieldTelephone, field)
 	}
 
+	// Update notes
 	if contact.Notes != "" {
 		card.SetValue(vcard.FieldNote, contact.Notes)
+	} else {
+		delete(card, vcard.FieldNote)
 	}
 
-	card.SetValue(vcard.FieldVersion, "3.0")
+	// Update birthday
+	if contact.Birthday != "" {
+		card.SetValue(vcard.FieldBirthday, contact.Birthday)
+	} else {
+		delete(card, vcard.FieldBirthday)
+	}
 
 	_, err = d.CardDAV.PutAddressObject(ctx, contact.ID, card)
 	if err != nil {

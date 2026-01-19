@@ -231,6 +231,114 @@ func (c *Client) FetchEmails(mailboxID string, position int) ([]model.Email, err
 	return emails, nil
 }
 
+// SearchEmails searches for emails across all mailboxes using the given query.
+// The query searches across subject, from, to, and body text.
+func (c *Client) SearchEmails(query string, limit int) ([]model.Email, error) {
+	var emails []model.Email
+	if limit <= 0 {
+		limit = 50
+	}
+
+	// 1. Email/query with text filter (searches all fields)
+	reqQuery := &jmap.Request{}
+	q := &email.Query{
+		Account: c.getMailAccountID(),
+		Filter: &email.FilterCondition{
+			Text: query,
+		},
+		Sort: []*email.SortComparator{
+			{Property: "receivedAt", IsAscending: false},
+		},
+		Limit: uint64(limit),
+	}
+	reqQuery.Invoke(q)
+
+	resp1, err := c.Client.Do(reqQuery)
+	if err != nil {
+		return nil, fmt.Errorf("Email/query (search) failed: %w", err)
+	}
+
+	var ids []jmap.ID
+	for _, inv := range resp1.Responses {
+		if res, ok := inv.Args.(*email.QueryResponse); ok {
+			ids = res.IDs
+		}
+	}
+
+	if len(ids) == 0 {
+		return []model.Email{}, nil
+	}
+
+	// 2. Email/get
+	reqGet := &jmap.Request{}
+	g := &email.Get{
+		Account:    c.getMailAccountID(),
+		IDs:        ids,
+		Properties: []string{"id", "subject", "from", "to", "cc", "bcc", "replyTo", "preview", "receivedAt", "mailboxIds", "threadId", "keywords"},
+	}
+	reqGet.Invoke(g)
+
+	resp2, err := c.Client.Do(reqGet)
+	if err != nil {
+		return nil, fmt.Errorf("Email/get (search) failed: %w", err)
+	}
+
+	for _, inv := range resp2.Responses {
+		if res, ok := inv.Args.(*email.GetResponse); ok {
+			for _, e := range res.List {
+				sender := formatAddresses(e.From)
+				to := formatAddresses(e.To)
+				cc := formatAddresses(e.CC)
+				bcc := formatAddresses(e.BCC)
+				replyTo := formatAddresses(e.ReplyTo)
+
+				isUnread := true
+				if _, ok := e.Keywords["$seen"]; ok {
+					isUnread = false
+				}
+
+				isFlagged := false
+				if _, ok := e.Keywords["$flagged"]; ok {
+					isFlagged = true
+				}
+
+				isDraft := false
+				if _, ok := e.Keywords["$draft"]; ok {
+					isDraft = true
+				}
+
+				var boxIDs []string
+				for k := range e.MailboxIDs {
+					boxIDs = append(boxIDs, string(k))
+				}
+
+				dateStr := ""
+				if e.ReceivedAt != nil {
+					dateStr = e.ReceivedAt.Format("2006-01-02 15:04")
+				}
+
+				emails = append(emails, model.Email{
+					ID:         string(e.ID),
+					Subject:    e.Subject,
+					From:       sender,
+					To:         to,
+					Cc:         cc,
+					Bcc:        bcc,
+					ReplyTo:    replyTo,
+					Preview:    e.Preview,
+					Date:       dateStr,
+					IsUnread:   isUnread,
+					IsFlagged:  isFlagged,
+					IsDraft:    isDraft,
+					ThreadID:   string(e.ThreadID),
+					MailboxIDs: boxIDs,
+				})
+			}
+		}
+	}
+	return emails, nil
+}
+
 // FetchEmailBody fetches the full text body for a specific email ID.
 func (c *Client) FetchEmailBody(emailID string) (string, error) {
 	req := &jmap.Request{}
