@@ -1352,10 +1352,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			} else if m.state == viewEmails {
+				// Use fixed page height that matches rendering
+				pageHeight := 10
+				if m.height > 15 {
+					pageHeight = m.height - 12
+				}
+				if pageHeight < 5 {
+					pageHeight = 5
+				}
+				if pageHeight > 20 {
+					pageHeight = 20
+				}
+
 				if m.emailCursor > 0 {
 					m.emailCursor--
 					if m.emailCursor < m.emailOffset {
-						m.emailOffset = m.emailCursor
+						m.emailOffset--
 					}
 				}
 				return m, nil
@@ -1400,12 +1412,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			} else if m.state == viewEmails {
-				// Dynamic page height
-				headerHeight := 5
-				footerHeight := 2
-				pageHeight := m.height - headerHeight - footerHeight
+				// Use fixed page height that matches rendering
+				pageHeight := 10
+				if m.height > 15 {
+					pageHeight = m.height - 12
+				}
 				if pageHeight < 5 {
 					pageHeight = 5
+				}
+				if pageHeight > 20 {
+					pageHeight = 20
 				}
 
 				if m.emailCursor < len(m.emails)-1 {
@@ -2402,21 +2418,34 @@ func (m Model) View() string {
 				s.WriteString(helpStyle.Render("No emails found."))
 			}
 		} else {
-			// Basic Render Loop for Emails
-			headerHeight := 7
-			if m.searchActive || m.searchQuery != "" {
-				headerHeight += 2
+			// Calculate visible window - match the scroll handler exactly
+			pageHeight := 10
+			if m.height > 15 {
+				pageHeight = m.height - 12
 			}
-			footerHeight := 2
-			pageHeight := m.height - headerHeight - footerHeight
 			if pageHeight < 5 {
 				pageHeight = 5
+			}
+			if pageHeight > 20 {
+				pageHeight = 20
+			}
+
+			// Reset offset if it's beyond the list
+			if m.emailOffset >= len(displayEmails) {
+				m.emailOffset = 0
 			}
 
 			start := m.emailOffset
 			end := start + pageHeight
 			if end > len(displayEmails) {
 				end = len(displayEmails)
+			}
+
+			// Show position indicator
+			if m.searchQuery != "" {
+				s.WriteString(fmt.Sprintf("Showing %d-%d of %d (filtered from %d)\n\n", start+1, end, len(displayEmails), len(m.emails)))
+			} else {
+				s.WriteString(fmt.Sprintf("Showing %d-%d of %d\n\n", start+1, end, len(displayEmails)))
 			}
 
 			for i := start; i < end; i++ {
