@@ -1,14 +1,17 @@
 #!/bin/bash
 set -e
 
-VERSION="0.2.0"
-ARCH=$(dpkg --print-architecture)
+VERSION="0.2.4"
+ARCH="amd64"
+if [ "$(uname -m)" = "aarch64" ]; then
+    ARCH="arm64"
+fi
 PKG_NAME="fm-cli_${VERSION}_${ARCH}"
 
 echo "Building fm-cli v${VERSION} for ${ARCH}..."
 
 # Build binary
-CGO_ENABLED=1 go build -ldflags "-s -w" -o fm-cli ./cmd/fm-cli
+CGO_ENABLED=0 go build -ldflags "-s -w" -o fm-cli ./cmd/fm-cli
 
 # Create package structure
 mkdir -p "${PKG_NAME}/DEBIAN"
@@ -27,7 +30,7 @@ Version: ${VERSION}
 Section: mail
 Priority: optional
 Architecture: ${ARCH}
-Depends: libc6, libsqlite3-0
+Depends: libc6
 Recommends: libsecret-1-0
 Maintainer: Tim Apple <tim@example.com>
 Description: Terminal-based TUI for Fastmail

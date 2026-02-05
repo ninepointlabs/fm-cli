@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="0.2.0"
+VERSION="0.2.4"
 ARCH=$(uname -m)
 case $ARCH in
     x86_64) RPM_ARCH="x86_64" ;;

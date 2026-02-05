@@ -1,5 +1,5 @@
 Name:           fm-cli
-Version:        0.2.0
+Version:        0.2.4
 Release:        1%{?dist}
 Summary:        Terminal-based TUI for Fastmail
 
@@ -7,8 +7,9 @@ License:        MIT
 URL:            https://github.com/timappledotcom/fm-cli
 Source0:        %{name}-%{version}.tar.gz
 
+%global debug_package %{nil}
+
 BuildRequires:  golang >= 1.21
-BuildRequires:  sqlite-devel
 Requires:       glibc
 Recommends:     libsecret
 
@@ -21,20 +22,22 @@ contacts, offline mode, and secure credential storage.
 %setup -q
 
 %build
-export CGO_ENABLED=1
+export CGO_ENABLED=0
 go build -ldflags "-s -w -X main.version=%{version}" -o %{name} ./cmd/fm-cli
 
 %install
 install -Dm755 %{name} %{buildroot}%{_bindir}/%{name}
-install -Dm644 README.md %{buildroot}%{_docdir}/%{name}/README.md
-install -Dm644 LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 
 %files
-%license LICENSE
-%doc README.md
 %{_bindir}/%{name}
+%doc README.md
+%license LICENSE
 
 %changelog
+* Thu Feb 05 2026 Tim Apple <tim@example.com> - 0.2.4-1
+- Remove external SQLite dependency
+- Fix build with CGO_ENABLED=0
+
 * Fri Jan 17 2026 Tim Apple <tim@example.com> - 0.2.0-1
 - Add inline image support (Sixel/Kitty/iTerm2)
 - Add contact autocomplete in compose

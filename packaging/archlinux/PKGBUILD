@@ -1,6 +1,6 @@
 # Maintainer: Tim Apple <tim@example.com>
 pkgname=fm-cli
-pkgver=0.2.0
+pkgver=0.2.4
 pkgrel=1
 pkgdesc="A minimalist terminal-based TUI for Fastmail"
 arch=('x86_64' 'aarch64')
@@ -18,9 +18,9 @@ sha256sums=('SKIP')
 
 build() {
     cd "$pkgname-$pkgver"
-    export CGO_ENABLED=1
-    export GOFLAGS="-buildmode=pie -trimpath -mod=readonly -modcacherw"
-    go build -ldflags "-linkmode external -extldflags \"$LDFLAGS\" -s -w -X main.version=$pkgver" \
+    export CGO_ENABLED=0
+    export GOFLAGS="-trimpath -mod=readonly -modcacherw"
+    go build -ldflags "-s -w -X main.version=$pkgver" \
         -o $pkgname ./cmd/fm-cli
 }
 
