@@ -3,36 +3,42 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"os"
+	"path/filepath"
 	"strings"
-	"syscall"
+	"time"
 
 	"fm-cli/internal/api"
+	"fm-cli/internal/auth"
+	"fm-cli/internal/cli"
 	"fm-cli/internal/storage"
 	"fm-cli/internal/tui"
 
-	"github.com/99designs/keyring"
 	tea "github.com/charmbracelet/bubbletea"
-	"golang.org/x/term"
 )
 
-const (
-	serviceName       = "fm-cli"
-	keyringUser       = "fastmail-api-token" // The key for JMAP API token
-	keyringAppPwd     = "fastmail-app-password" // The key for CalDAV/CardDAV app password
-	keyringEmail      = "fastmail-email"     // The key for email address
+// Set by goreleaser through -ldflags "-X main.version=...".
+var (
+	version = "dev"
+	commit  = ""
+	date    = ""
 )
+
+var store = auth.NewStore()
 
 func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "login":
-			login()
-			return
-		case "logout":
-			logout()
-			return
+	cli.Version = version
+	argv := os.Args[1:]
+
+	if cli.Handled(argv) {
+		os.Exit(cli.NewApp().Run(context.Background(), argv))
+	}
+	if len(argv) > 0 {
+		switch argv[0] {
 		case "settings":
 			settings()
 			return
@@ -42,22 +48,168 @@ func main() {
 		case "debug":
 			debugSession()
 			return
-		case "help":
-			printHelp()
-			return
+		case "tui":
+			// fall through to the TUI
 		}
 	}
 
-	// Security: Fetch Token from Keyring
-	token, err := getToken()
-	if err != nil || token == "" {
-		// Fallback to env var for development
-		token = os.Getenv("FM_API_TOKEN")
+	opts, err := parseTUIArgs(argv)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fm-cli: %v\n", err)
+		os.Exit(2)
 	}
+	if opts.remote {
+		if err := sendToRunningTUI(opts.thread, opts.email); err != nil {
+			fmt.Fprintf(os.Stderr, "fm-cli: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	runTUI(opts)
+}
 
-	if token == "" {
-		fmt.Println("No API token found.")
-		fmt.Println("Please run 'fm-cli login' to store your Fastmail API token, or set FM_API_TOKEN.")
+// tuiOptions are the flags `fm-cli tui` accepts.
+type tuiOptions struct {
+	thread string
+	email  string
+	remote bool
+}
+
+func parseTUIArgs(argv []string) (tuiOptions, error) {
+	var opts tuiOptions
+	for i := 0; i < len(argv); i++ {
+		arg := argv[i]
+		switch {
+		case arg == "tui":
+		case arg == "--remote":
+			opts.remote = true
+		case arg == "--thread" || arg == "--email":
+			if i+1 >= len(argv) {
+				return opts, fmt.Errorf("flag %q needs a value", arg)
+			}
+			i++
+			if arg == "--thread" {
+				opts.thread = argv[i]
+			} else {
+				opts.email = argv[i]
+			}
+		case strings.HasPrefix(arg, "--thread="):
+			opts.thread = strings.TrimPrefix(arg, "--thread=")
+		case strings.HasPrefix(arg, "--email="):
+			opts.email = strings.TrimPrefix(arg, "--email=")
+		default:
+			return opts, fmt.Errorf("unknown flag %q", arg)
+		}
+	}
+	if opts.remote && opts.thread == "" && opts.email == "" {
+		return opts, errors.New("--remote needs --thread or --email")
+	}
+	return opts, nil
+}
+
+// tuiSocketPath is where a running TUI listens for hand-offs.
+func tuiSocketPath() (string, error) {
+	dir, err := auth.RuntimeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "tui.sock"), nil
+}
+
+type tuiHandoff struct {
+	Thread string `json:"thread,omitempty"`
+	Email  string `json:"email,omitempty"`
+}
+
+// sendToRunningTUI hands a target to a TUI already listening on the socket.
+// It fails when none is, so the caller can start one instead.
+func sendToRunningTUI(thread, email string) error {
+	path, err := tuiSocketPath()
+	if err != nil {
+		return err
+	}
+	conn, err := net.DialTimeout("unix", path, 2*time.Second)
+	if err != nil {
+		return errors.New("no running fm-cli TUI to hand off to")
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	if err := json.NewEncoder(conn).Encode(tuiHandoff{Thread: thread, Email: email}); err != nil {
+		return err
+	}
+	ack := make([]byte, 3)
+	if _, err := conn.Read(ack); err != nil || string(ack) != "ok\n" {
+		return errors.New("the running TUI did not accept the hand-off")
+	}
+	return nil
+}
+
+// listenForHandoffs serves the TUI socket until the program exits. A stale
+// socket file from a crashed TUI is replaced; a live one (another TUI) means
+// this instance simply does not listen.
+func listenForHandoffs(p *tea.Program) (cleanup func()) {
+	path, err := tuiSocketPath()
+	if err != nil {
+		return func() {}
+	}
+	if conn, err := net.DialTimeout("unix", path, 500*time.Millisecond); err == nil {
+		conn.Close()
+		return func() {}
+	}
+	_ = os.Remove(path)
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		return func() {}
+	}
+	_ = os.Chmod(path, 0o600)
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func(conn net.Conn) {
+				defer conn.Close()
+				_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+				var handoff tuiHandoff
+				if err := json.NewDecoder(io.LimitReader(conn, 4096)).Decode(&handoff); err != nil {
+					return
+				}
+				if handoff.Thread == "" && handoff.Email == "" || len(handoff.Thread) > 64 || len(handoff.Email) > 64 {
+					return
+				}
+				p.Send(tui.OpenEmailMsg{ThreadID: handoff.Thread, EmailID: handoff.Email})
+				_, _ = conn.Write([]byte("ok\n"))
+			}(conn)
+		}
+	}()
+	return func() {
+		listener.Close()
+		_ = os.Remove(path)
+	}
+}
+
+// connect opens an authenticated JMAP client from the stored credential.
+func connect(ctx context.Context) (*api.Client, error) {
+	creds, err := store.Load()
+	if err != nil {
+		return nil, err
+	}
+	if !creds.Authenticated() {
+		return nil, auth.ErrSignedOut
+	}
+	source := auth.NewSource(store, creds, nil)
+	return api.NewClientWithHTTP(ctx, source.HTTPClient(), creds.Issuer+"/jmap/session")
+}
+
+func runTUI(opts tuiOptions) {
+	if _, err := store.Load(); err != nil {
+		if errors.Is(err, auth.ErrSignedOut) {
+			fmt.Println("Not signed in.")
+			fmt.Println("Run 'fm-cli auth login' to sign in with your browser, or 'fm-cli auth login --token' to paste an API token.")
+			os.Exit(1)
+		}
+		fmt.Printf("Could not read credentials: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -85,7 +237,9 @@ func main() {
 	var client *api.Client
 	if !offlineMode {
 		fmt.Println("Connecting to Fastmail JMAP...")
-		client, err = api.NewClient(token)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		client, err = connect(ctx)
+		cancel()
 		if err != nil {
 			fmt.Printf("Failed to connect to server: %v\n", err)
 			if db != nil {
@@ -101,7 +255,7 @@ func main() {
 
 	// Initialize CalDAV/CardDAV Client (optional, for calendar/contacts)
 	var davClient *api.DAVClient
-	appPwd, email := getAppPassword()
+	appPwd, email := store.DAVCredentials()
 	if appPwd != "" && email != "" {
 		davClient, err = api.NewDAVClient(email, appPwd)
 		if err != nil {
@@ -111,168 +265,15 @@ func main() {
 	}
 
 	// Initialize Bubble Tea Program
-	p := tea.NewProgram(tui.NewModelWithStorage(client, davClient, db, offlineMode), tea.WithAltScreen())
+	model := tui.NewModelWithStorage(client, davClient, db, offlineMode).WithTarget(opts.thread, opts.email)
+	p := tea.NewProgram(model, tea.WithAltScreen())
+	stopListening := listenForHandoffs(p)
+	defer stopListening()
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
 	}
-}
-
-func printHelp() {
-	fmt.Println("fm-cli - Fastmail TUI Client")
-	fmt.Println("\nUsage:")
-	fmt.Println("  fm-cli [command]")
-	fmt.Println("\nCommands:")
-	fmt.Println("  login     Store Fastmail API token in system keychain")
-	fmt.Println("  logout    Remove Fastmail API token from system keychain")
-	fmt.Println("  settings  Configure offline mode and other settings")
-	fmt.Println("  sync      Sync pending offline changes with server")
-	fmt.Println("  help      Show this help message")
-	fmt.Println("\nIf no command is provided, the TUI will start.")
-}
-
-func login() {
-	fmt.Println("FM-CLI Login Setup")
-	fmt.Println("==================")
-	fmt.Println()
-
-	// Email address
-	fmt.Print("Enter your Fastmail email address: ")
-	var email string
-	fmt.Scanln(&email)
-	email = strings.TrimSpace(email)
-
-	// JMAP API Token
-	fmt.Println()
-	fmt.Println("JMAP API Token (for email access):")
-	fmt.Println("Get one from: Settings > Privacy & Security > Integrations > API Tokens")
-	fmt.Print("Enter your Fastmail API Token: ")
-	byteToken, err := term.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		fmt.Printf("\nError reading token: %v\n", err)
-		return
-	}
-	token := strings.TrimSpace(string(byteToken))
-	fmt.Println()
-
-	// App password for CalDAV/CardDAV (optional)
-	fmt.Println()
-	fmt.Println("App Password (for calendar/contacts access - optional):")
-	fmt.Println("Get one from: Settings > Privacy & Security > Integrations > App Passwords")
-	fmt.Println("Create one with 'Mail, Contacts & Calendars' access")
-	fmt.Print("Enter your App Password (or press Enter to skip): ")
-	byteAppPwd, err := term.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		fmt.Printf("\nError reading app password: %v\n", err)
-		return
-	}
-	appPwd := strings.TrimSpace(string(byteAppPwd))
-	fmt.Println()
-
-	ring, err := keyring.Open(keyring.Config{
-		ServiceName: serviceName,
-	})
-	if err != nil {
-		fmt.Printf("Error opening keyring: %v\n", err)
-		return
-	}
-
-	// Store email
-	err = ring.Set(keyring.Item{
-		Key:  keyringEmail,
-		Data: []byte(email),
-	})
-	if err != nil {
-		fmt.Printf("Error storing email: %v\n", err)
-		return
-	}
-
-	// Store JMAP token
-	err = ring.Set(keyring.Item{
-		Key:  keyringUser,
-		Data: []byte(token),
-	})
-	if err != nil {
-		fmt.Printf("Error storing token: %v\n", err)
-		return
-	}
-
-	// Store app password if provided
-	if appPwd != "" {
-		err = ring.Set(keyring.Item{
-			Key:  keyringAppPwd,
-			Data: []byte(appPwd),
-		})
-		if err != nil {
-			fmt.Printf("Error storing app password: %v\n", err)
-			return
-		}
-		fmt.Println("Credentials saved successfully (email, API token, and app password).")
-	} else {
-		fmt.Println("Credentials saved successfully (email and API token).")
-		fmt.Println("Note: Calendar and contacts features require an app password.")
-	}
-}
-
-func logout() {
-	ring, err := keyring.Open(keyring.Config{
-		ServiceName: serviceName,
-	})
-	if err != nil {
-		fmt.Printf("Error opening keyring: %v\n", err)
-		return
-	}
-
-	err = ring.Remove(keyringUser)
-	if err != nil {
-		fmt.Printf("Error removing token: %v\n", err)
-		return
-	}
-	fmt.Println("Token removed from system keyring.")
-}
-
-func getToken() (string, error) {
-	ring, err := keyring.Open(keyring.Config{
-		ServiceName: serviceName,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	item, err := ring.Get(keyringUser)
-	if err != nil {
-		return "", err
-	}
-
-	return string(item.Data), nil
-}
-
-func getAppPassword() (appPwd, email string) {
-	ring, err := keyring.Open(keyring.Config{
-		ServiceName: serviceName,
-	})
-	if err != nil {
-		return "", ""
-	}
-
-	emailItem, err := ring.Get(keyringEmail)
-	if err != nil {
-		// Try environment variable fallback
-		email = os.Getenv("FM_EMAIL")
-	} else {
-		email = string(emailItem.Data)
-	}
-
-	appPwdItem, err := ring.Get(keyringAppPwd)
-	if err != nil {
-		// Try environment variable fallback
-		appPwd = os.Getenv("FM_APP_PASSWORD")
-	} else {
-		appPwd = string(appPwdItem.Data)
-	}
-
-	return appPwd, email
 }
 
 func settings() {
@@ -342,26 +343,18 @@ func syncNow() {
 		return
 	}
 
-	// Get token
-	token, err := getToken()
-	if err != nil || token == "" {
-		token = os.Getenv("FM_API_TOKEN")
-	}
-	if token == "" {
-		fmt.Println("No API token found. Please run 'fm-cli login' first.")
-		return
-	}
-
 	// Connect to server
 	fmt.Println("Connecting to Fastmail JMAP...")
-	client, err := api.NewClient(token)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	client, err := connect(ctx)
 	if err != nil {
 		fmt.Printf("Failed to connect: %v\n", err)
 		return
 	}
 
 	fmt.Printf("Syncing %d pending action(s)...\n", len(actions))
-	
+
 	for _, action := range actions {
 		fmt.Printf("  Syncing %s...", action.Type)
 		err := syncAction(client, db, action)
@@ -372,7 +365,7 @@ func syncNow() {
 			db.RemovePendingAction(action.ID)
 		}
 	}
-	
+
 	fmt.Println("Sync complete.")
 }
 
@@ -386,61 +379,59 @@ func syncAction(client *api.Client, db *storage.DB, action storage.PendingAction
 			return err
 		}
 		return client.SaveDraft("", data["from"], data["to"], data["subject"], data["body"])
-	
+
 	case "send_email":
 		var data map[string]string
 		if err := json.Unmarshal([]byte(action.Data), &data); err != nil {
 			return err
 		}
 		return client.SendEmail("", data["from"], data["to"], data["subject"], data["body"])
-	
+
 	case "delete":
 		return client.DeleteEmail(action.EmailID)
-	
+
 	case "set_unread":
 		var data map[string]bool
 		if err := json.Unmarshal([]byte(action.Data), &data); err != nil {
 			return err
 		}
 		return client.SetUnread(action.EmailID, data["is_unread"])
-	
+
 	case "set_flagged":
 		var data map[string]bool
 		if err := json.Unmarshal([]byte(action.Data), &data); err != nil {
 			return err
 		}
 		return client.SetFlagged(action.EmailID, data["is_flagged"])
-	
+
 	default:
 		return fmt.Errorf("unknown action type: %s", action.Type)
 	}
 }
 
 func debugSession() {
-	token, err := getToken()
-	if err != nil || token == "" {
-		token = os.Getenv("FM_API_TOKEN")
-	}
-	if token == "" {
-		fmt.Println("No API token found. Please run 'fm-cli login' first.")
-		return
-	}
-
-	client, err := api.NewClient(token)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	client, err := connect(ctx)
 	if err != nil {
 		fmt.Printf("Error connecting to Fastmail: %v\n", err)
 		return
 	}
 
+	fmt.Printf("fm-cli %s", version)
+	if commit != "" {
+		fmt.Printf(" (%s %s)", commit, date)
+	}
+	fmt.Println()
 	fmt.Println("JMAP Session:")
 	fmt.Println(client.DebugSession())
 
 	// Also test CalDAV/CardDAV
-	appPwd, email := getAppPassword()
+	appPwd, email := store.DAVCredentials()
 	if appPwd != "" && email != "" {
 		fmt.Println("\nCalDAV/CardDAV Connection:")
 		fmt.Printf("Email: %s\n", email)
-		fmt.Printf("App Password: %s***\n", appPwd[:min(3, len(appPwd))])
+		fmt.Printf("App Password: set (%d characters)\n", len(appPwd))
 
 		davClient, err := api.NewDAVClient(email, appPwd)
 		if err != nil {
@@ -471,7 +462,7 @@ func debugSession() {
 		}
 	} else {
 		fmt.Println("\nNo CalDAV/CardDAV credentials configured.")
-		fmt.Println("Run 'fm-cli login' with an app password to enable calendar/contacts.")
+		fmt.Println("Run 'fm-cli auth dav' to store an app password for calendar/contacts.")
 	}
 }
 

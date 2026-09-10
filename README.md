@@ -1,335 +1,223 @@
-# FM-Cli
+# fm-cli
 
-A minimalist, terminal-based user interface (TUI) for Fastmail, built in Go.
+Fastmail from the terminal: a small Go client for Fastmail's JMAP API with a
+full-screen mail app, a set of scriptable commands that print JSON, and a
+live `watch` that follows your mailbox over Fastmail's push connection. It is
+the engine behind the [Fastmail plugin for Omarchy](https://github.com/ninepointlabs/omarchy-fastmail).
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)
+![The fm-cli terminal app reading a thread](docs/tui.png)
 
-## Features
+## Install
 
-### Email
-- **Mailbox Navigation**: Browse your folders with unread counts
-- **Email Reading**: Plain text and HTML-to-Markdown rendering with clickable links
-- **Composition**: Write emails using your preferred `$EDITOR` (Vim, Nano, etc.)
-- **Contact Autocomplete**: Type in the To field and get suggestions from your address book
-- **Multiple Identities**: Select from your configured Fastmail sending addresses
-- **Reply & Forward**: Reply to sender, reply all, or forward with quoted content
-- **Draft Management**: Save, edit, and send drafts
-- **Email Actions**: Mark read/unread, flag, archive, and delete
-- **Inline Images**: View images in terminal (Sixel/Kitty/iTerm2) or open in browser
-- **Pagination**: Infinite scroll through large mailboxes
+On Omarchy:
 
-### Calendar
-- **Agenda View**: See upcoming events for the next 7 days
-- **Event Management**: Create, edit, and delete events
-- **CalDAV Integration**: Syncs with Fastmail calendars
-
-### Contacts
-- **Address Book**: Browse and search your contacts
-- **Contact Management**: Create, edit, and delete contacts
-- **CardDAV Integration**: Syncs with Fastmail address books
-
-### Offline Mode
-- **Local Storage**: Emails cached in SQLite for offline reading
-- **Full Body Caching**: Email bodies pre-fetched for complete offline access
-- **Offline Drafts**: Compose emails offline, sync when back online
-- **Pending Actions**: Changes queued and synced automatically
-
-### Other Features
-- **Secure Auth**: Credentials stored in system keyring
-- **OSC 8 Links**: Clickable hyperlinks in supported terminals
-- **Detailed Headers**: Toggle expanded email headers
-- **Auto-Refresh**: Automatic sync after actions
-
-## Installation
-
-### From Package Manager
-
-#### Arch Linux (AUR)
 ```bash
-yay -S fm-cli
-# or
-paru -S fm-cli
+omarchy-mise-install github:ninepointlabs/fm-cli fm-cli
 ```
 
-#### Debian/Ubuntu
+With mise elsewhere:
+
 ```bash
-# Download the .deb package from releases
-sudo dpkg -i fm-cli_0.2.0_amd64.deb
+mise use -g github:ninepointlabs/fm-cli@latest
 ```
 
-#### Fedora/RHEL
+Every [release](https://github.com/ninepointlabs/fm-cli/releases) also ships
+`.pkg.tar.zst`, `.deb` and `.rpm` packages and plain tarballs for Linux and
+macOS. From source:
+
 ```bash
-# Download the .rpm package from releases
-sudo rpm -i fm-cli-0.2.0-1.x86_64.rpm
-```
-
-### From Source
-
-#### Prerequisites
-- Go 1.21+
-- CGO enabled (for SQLite support)
-- A Fastmail account
-
-#### Build
-```bash
-git clone https://github.com/timappledotcom/fm-cli.git
+git clone https://github.com/ninepointlabs/fm-cli.git
 cd fm-cli
 go build -o fm-cli ./cmd/fm-cli
-sudo mv fm-cli /usr/local/bin/
 ```
 
-## Configuration
+Go 1.25 or newer. No C toolchain needed.
 
-### Quick Start
-
-1. **Get your Fastmail credentials** (see below)
-2. **Run the login wizard**:
-   ```bash
-   fm-cli login
-   ```
-3. **Start the app**:
-   ```bash
-   fm-cli
-   ```
-
-### Getting Your Fastmail Credentials
-
-#### API Token (Required - for email)
-
-1. Log in to [Fastmail](https://www.fastmail.com)
-2. Go to **Settings** → **Privacy & Security** → **Integrations** → **API Tokens**
-3. Click **New API Token**
-4. Give it a name (e.g., "fm-cli")
-5. Select permissions: **Mail** (read/write) and **Submission**
-6. Copy the generated token
-
-#### App Password (Optional - for calendar/contacts)
-
-1. Go to **Settings** → **Privacy & Security** → **Integrations** → **App Passwords**
-2. Click **New App Password**
-3. Select **Mail, Contacts & Calendars** access
-4. Give it a name (e.g., "fm-cli-dav")
-5. Copy the generated password
-
-> **Note**: The App Password uses CalDAV/CardDAV protocols which require separate authentication from the JMAP API token.
-
-### Environment Variables (Alternative)
-
-Instead of using the login command, you can set environment variables:
+## Sign in
 
 ```bash
-export FM_API_TOKEN="your-api-token"
-export FM_EMAIL="you@fastmail.com"
-export FM_APP_PASSWORD="your-app-password"  # Optional
+fm-cli auth login
 ```
 
-### Data Storage
+This opens Fastmail's consent page in your browser. Approve fm-cli there and
+you are done: the tokens go into your system keyring and refresh themselves.
+No token to copy. Fastmail lists the authorization under *Settings → Privacy &
+Security → Connected apps*, where you can revoke it.
 
-- **Credentials**: Stored securely in your system keyring
-- **Offline data**: `~/.config/fm-cli/emails.db` (SQLite)
-
-## Usage
-
-### Commands
-
-| Command | Description |
-| --- | --- |
-| `fm-cli` | Start the TUI |
-| `fm-cli login` | Store credentials in system keychain |
-| `fm-cli logout` | Remove credentials from keychain |
-| `fm-cli settings` | View current settings |
-| `fm-cli settings offline on` | Enable offline mode |
-| `fm-cli settings offline off` | Disable offline mode |
-| `fm-cli sync` | Sync pending offline changes |
-| `fm-cli debug` | Show debug info (JMAP session, CalDAV/CardDAV status) |
-| `fm-cli help` | Show help |
-
-### Offline Mode
-
-Enable offline mode to cache emails locally:
+Prefer an API token? Create one under *Settings → Privacy & Security →
+Integrations → API Tokens* with the **Email** scope (add **Email submission**
+to send), then:
 
 ```bash
-fm-cli settings offline on
+fm-cli auth login --token     # prompts, or reads the token from stdin
 ```
 
-When enabled:
-- Emails and mailboxes are cached in SQLite
-- Email bodies are pre-fetched for complete offline reading
-- Read cached emails without internet
-- Compose drafts offline (queued for sync)
-- Run `fm-cli sync` to push pending changes
+Other auth commands:
 
-### Inline Images
+```bash
+fm-cli auth status            # signed in? as whom? (no network call)
+fm-cli auth logout            # revoke the authorization and forget it
+fm-cli auth token             # print a current bearer token for curl or scripts
+fm-cli auth dav               # store an app password for calendar and contacts
+fm-cli setup                  # sign in only if signed out
+```
 
-When viewing an email with images:
-- Press `b` to open the email in your browser
-- Press `i` to render images inline (requires Sixel/Kitty/iTerm2 terminal support)
+Calendar and contacts use CalDAV and CardDAV, which need a Fastmail **app
+password** with *Mail, Contacts & Calendars* access; `fm-cli auth dav` stores
+it. For headless machines, `FM_API_TOKEN`, `FM_EMAIL` and `FM_APP_PASSWORD` in
+the environment stand in for the keyring.
 
-Supported terminals for inline images:
-- Kitty
-- iTerm2
-- WezTerm
-- Foot
-- mlterm
-- Any terminal with Sixel support
+## The terminal app
 
-### Controls
+```bash
+fm-cli                                     # the app, on its main menu
+fm-cli tui --thread <thread-id>            # the app, opened on a thread
+fm-cli tui --thread <thread-id> --remote   # tell a running app to jump there
+```
 
-#### Global Navigation
-| Key | Action |
-| --- | --- |
-| `0` | Return to main menu |
-| `1` | Go to Mail |
-| `2` | Go to Calendar |
-| `3` | Go to Contacts |
-| `4` | Go to Settings |
-| `q` | Quit (from main menu) |
+Folders, threads, reading with links you can click, reply, reply all, forward,
+compose in `$EDITOR` with contact autocomplete and a choice of sending
+identity, drafts, flags, archive, move, delete, search, a seven-day calendar
+agenda, contacts, inline images in terminals that can draw them, and an
+offline mode that caches mail in SQLite.
 
-#### Main Menu
-| Key | Action |
-| --- | --- |
-| `j` / `k` (or Arrows) | Navigate up/down |
-| `Enter` / `l` | Select item |
-| `m` | Go to Mail |
-| `c` | Go to Calendar |
-| `o` | Go to Contacts |
-| `s` | Go to Settings |
+### Keys
 
-#### Mailbox List
-| Key | Action |
-| --- | --- |
-| `j` / `k` (or Arrows) | Navigate up/down |
-| `Enter` / `l` | Open mailbox |
-| `h` / `Esc` | Back to main menu |
+| Everywhere | |
+|---|---|
+| `0` `1` `2` `3` `4` | Main menu, Mail, Calendar, Contacts, Settings |
+| `j` `k` or arrows | Move |
+| `Enter` `l` | Open |
+| `h` `Esc` | Back |
 | `r` | Refresh |
-| `c` | Compose new email |
+| `q` | Quit, from the main menu |
 
-#### Email List
-| Key | Action |
-| --- | --- |
-| `j` / `k` (or Arrows) | Navigate up/down |
-| `Enter` / `l` | Open email |
-| `h` / `Esc` | Go back to mailboxes |
+| Email list | |
+|---|---|
 | `u` | Toggle read/unread |
-| `f` | Toggle flagged |
+| `f` | Toggle flag |
 | `e` | Archive |
-| `d` / `Backspace` | Delete |
-| `r` | Refresh |
-| `c` | Compose new email |
+| `d` `Backspace` | Delete |
+| `c` | Compose |
 
-#### Email View
-| Key | Action |
-| --- | --- |
-| `h` / `Esc` | Go back to email list |
-| `R` | Reply to sender |
-| `A` | Reply all |
-| `F` | Forward |
-| `m` | Toggle detailed headers |
-| `b` | Open in browser |
-| `i` | View inline images (if terminal supports) |
-| `e` | Edit (drafts only) |
+| Reading | |
+|---|---|
+| `R` `A` `F` | Reply, reply all, forward |
+| `m` | Toggle full headers |
+| `b` | Open the HTML in your browser |
+| `i` | Load and show the images inline |
+| `e` | Edit, for drafts |
 
-#### Compose
-| Key | Action |
-| --- | --- |
-| `↑` / `↓` | Navigate contact suggestions |
-| `Tab` | Select suggestion / Cycle identities |
-| `Enter` | Select suggestion / Continue to next field |
-| `Esc` | Dismiss suggestions / Cancel |
+| Compose and send | |
+|---|---|
+| `↑` `↓` `Tab` `Enter` | Pick a contact suggestion; `Tab` also cycles identities |
+| `y` `s` `e` `n` | Send, save as draft, edit body, cancel |
 
-#### Send Confirmation
-| Key | Action |
-| --- | --- |
-| `y` | Send email |
-| `s` | Save as draft |
-| `e` | Edit body |
-| `n` | Cancel |
-| `Tab` | Change sending identity |
+Calendar and contacts: `n` new, `e` edit, `d` delete from the detail view.
 
-#### Calendar (Agenda View)
-| Key | Action |
-| --- | --- |
-| `j` / `k` (or Arrows) | Navigate events |
-| `Enter` / `l` | View event details |
-| `n` | Create new event |
-| `e` | Edit event (from details view) |
-| `d` | Delete event |
-| `r` | Refresh |
-| `h` / `Esc` | Back (from details) or to menu |
+## Scripting
 
-#### Calendar Event Editor
-| Key | Action |
-| --- | --- |
-| `Enter` | Save event |
-| `Esc` | Cancel |
+Every command below takes `--json` and prints exactly one JSON object:
+`{"ok": true, "data": …, "summary": "…"}` on success, and on stderr
+`{"ok": false, "error": "…", "code": "auth|usage|network|remote|busy"}` on
+failure. The full contract, with every field, is in
+[docs/omarchy-contract.md](docs/omarchy-contract.md).
 
-#### Contacts
-| Key | Action |
-| --- | --- |
-| `j` / `k` (or Arrows) | Navigate contacts |
-| `Enter` / `l` | View contact details |
-| `n` | Create new contact |
-| `e` | Edit contact (from details view) |
-| `d` | Delete contact |
-| `r` | Refresh |
-| `h` / `Esc` | Back (from details) or to menu |
+```bash
+fm-cli account list --json
+fm-cli box list --json
+fm-cli box view inbox --limit 20 --json       # one posting per thread, newest first
+fm-cli box view all --json                     # Inbox plus every unseen thread in every other folder
+fm-cli box view all --exclude "Other Services" --exclude Newsletters --json
+fm-cli seen <thread-or-email-id> --json
+fm-cli unseen <thread-or-email-id> --json
+fm-cli watch                                   # a JSON line per change, live
+fm-cli watch --box inbox --events new          # only new unread mail in the Inbox
+```
 
-#### Contact Editor
-| Key | Action |
-| --- | --- |
-| `Tab` | Move to next field |
-| `Enter` | Save contact |
-| `Esc` | Cancel |
+**The `all` view** exists because Fastmail rules run on the server, so mail
+filed into folders never touches the Inbox. `box view all` merges the newest
+Inbox threads with every unseen thread elsewhere, says which folder each came
+from, and lists the folders that currently have unread mail. Junk, Trash,
+Drafts, Sent, Snoozed, Scheduled and Archive are always left out; `--exclude`
+drops more, by name, path, role or id, and a parent folder takes its
+subfolders with it.
 
-#### Settings
-| Key | Action |
-| --- | --- |
-| `j` / `k` (or Arrows) | Navigate |
-| `Enter` | Toggle setting |
-| `h` / `Esc` / `0` | Back to main menu |
+**`watch`** holds a JMAP push connection open. It prints `{"change":"ready"}`
+once it is caught up, one line per added, updated or deleted email with the
+folder it sits in and a `new` flag for unseen mail that arrived after the
+watch began, `{"change":"disconnected"}` when the connection drops, and
+`{"change":"resync"}` when the server could not list changes one by one.
+Fastmail allows one push connection per sign-in, so a second `watch` refuses
+to start rather than knocking the first offline.
+
+## Security
+
+- **Credentials** live in the system keyring (Secret Service, KWallet,
+  Keychain or Windows Credential Manager only; never a file), as one record
+  holding the access token, the rotating refresh token and their expiry.
+- **OAuth** uses PKCE and a random state, listens on a random loopback port
+  for the browser's redirect only, ignores requests that do not carry this
+  attempt's state, and sends the RFC 8707 `resource` parameter Fastmail
+  requires. Refresh is serialized across processes with a file lock, because
+  Fastmail revokes the whole authorization if a spent refresh token is reused.
+- **`auth token`** prints a bearer token that reads and changes your mail
+  until it expires. It warns on a terminal; keep it out of shell history.
+- **Untrusted text**: subjects, senders, previews and bodies have control
+  characters stripped before they reach the terminal, list rows are cut by
+  character rather than byte, and only URLs made of RFC 3986 characters become
+  clickable links.
+- **Images and the browser**: `i` loads an email's images over https only, up
+  to 8 MB each, and tells the sender's server that you opened the mail; `b`
+  opens the HTML in your browser with a Content-Security-Policy that blocks
+  scripts and remote loads other than images. Both are yours to press.
+- **Local files**: the hand-off socket for `tui --remote`, the watch lock and
+  the refresh lock live in `$XDG_RUNTIME_DIR/fm-cli` (mode 700, owner
+  checked), cached mail in `~/.config/fm-cli/emails.db` (mode 600), and the
+  browser preview in `~/.cache/fm-cli/preview.html`, replaced on each use and
+  removed after ten minutes.
+- Dependencies are pinned in `go.mod`; `govulncheck ./...` runs clean as of
+  0.3.0. Releases are built by GitHub Actions from a tag, with the actions
+  pinned to commits.
+
+## Offline mode and settings
+
+```bash
+fm-cli settings                 # show settings
+fm-cli settings offline on      # cache mail and bodies locally, draft offline
+fm-cli sync                     # push queued offline changes
+fm-cli debug                    # dump the JMAP session and DAV status
+```
+
+Calendar and contacts need a connection; only mail works offline. If you
+started offline and want to go online, restart the app.
 
 ## Troubleshooting
 
-### "No calendars found" or "No address books found"
-- Make sure you've configured an App Password (not just the API Token)
-- Run `fm-cli debug` to check CalDAV/CardDAV connection status
-- The App Password must have "Mail, Contacts & Calendars" permission
+- **"No calendars found" or "No address books found"**: store an app password
+  with `fm-cli auth dav`; the API token alone does not cover CalDAV/CardDAV.
+  `fm-cli debug` reports the DAV status.
+- **Images not showing inline**: the terminal must support Sixel, the Kitty
+  graphics protocol, or iTerm2 images (Kitty, WezTerm, foot, iTerm2, mlterm).
+  `b` opens the mail in the browser instead.
+- **`another fm-cli watch is already running`**: one push connection per
+  sign-in. Stop the other watch, or let it be the one; the Omarchy plugin's
+  watch is normally the one.
+- **Sign-in says `invalid_target`**: an older fm-cli; 0.3.0 sends the
+  `resource` parameter Fastmail requires.
 
-### "Calendar/Contacts not available in offline mode"
-- Calendar and Contacts require an internet connection
-- Only email supports offline mode currently
+## Development
 
-### Crashes when switching modes
-- If you started in offline mode but want to go online, restart the app
-- The JMAP client is only initialized at startup
-
-### Images not displaying inline
-- Your terminal must support Sixel, Kitty graphics, or iTerm2 inline images
-- Use `b` to open in browser as a fallback
-
-## Building Packages
-
-### Debian/Ubuntu (.deb)
 ```bash
-./scripts/build-deb.sh
+go test ./...
+go vet ./...
+go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
 
-### Fedora/RHEL (.rpm)
-```bash
-./scripts/build-rpm.sh
-```
-
-### Arch Linux (PKGBUILD)
-```bash
-cd packaging/archlinux
-makepkg -si
-```
+Releases: push a `v*` tag and GoReleaser builds the packages and tarballs.
+`./scripts/build-deb.sh`, `./scripts/build-rpm.sh` and
+`packaging/archlinux/PKGBUILD` build the packages locally.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+MIT, see [LICENSE](LICENSE). Not affiliated with Fastmail.

@@ -20,3 +20,13 @@ fm-cli-*.txt
 
 # Build artifacts
 dist/
+
+# Build artifacts
+*.deb
+*.rpm
+*.pkg.tar.zst
+*.tar.gz
+packaging/archlinux/pkg/
+packaging/archlinux/src/
+dist/
+/fm-cli

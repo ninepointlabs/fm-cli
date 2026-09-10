@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Tim Apple <tim@example.com>
 Build-Depends: debhelper (>= 11), golang-go (>= 1.21)
 Standards-Version: 4.5.0
-Homepage: https://github.com/timappledotcom/fm-cli
+Homepage: https://github.com/ninepointlabs/fm-cli
 
 Package: fm-cli
 Architecture: any

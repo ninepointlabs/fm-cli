@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -39,7 +40,7 @@ func DetectCapability() TerminalCapability {
 
 	// Check for SIXEL support via terminfo or known terminals
 	term := os.Getenv("TERM")
-	if strings.Contains(term, "sixel") || 
+	if strings.Contains(term, "sixel") ||
 		strings.Contains(term, "mlterm") ||
 		strings.Contains(term, "yaft") ||
 		os.Getenv("SIXEL_SUPPORT") == "1" {
@@ -74,31 +75,31 @@ type ImageInfo struct {
 // ExtractImagesFromHTML extracts image URLs from HTML content
 func ExtractImagesFromHTML(html string) []ImageInfo {
 	var images []ImageInfo
-	
+
 	// Match img tags
 	imgRegex := regexp.MustCompile(`<img[^>]+src=["']([^"']+)["'][^>]*>`)
 	altRegex := regexp.MustCompile(`alt=["']([^"']*)["']`)
-	
+
 	matches := imgRegex.FindAllStringSubmatch(html, -1)
 	for _, match := range matches {
 		if len(match) >= 2 {
 			img := ImageInfo{URL: match[1]}
-			
+
 			// Try to get alt text
 			altMatch := altRegex.FindStringSubmatch(match[0])
 			if len(altMatch) >= 2 {
 				img.AltText = altMatch[1]
 			}
-			
+
 			// Check if it's a CID reference
 			if strings.HasPrefix(img.URL, "cid:") {
 				img.CID = strings.TrimPrefix(img.URL, "cid:")
 			}
-			
+
 			images = append(images, img)
 		}
 	}
-	
+
 	return images
 }
 
@@ -109,27 +110,52 @@ func DownloadImage(url string) ([]byte, error) {
 		return nil, fmt.Errorf("unsupported image source: %s", url[:min(20, len(url))])
 	}
 
+	// Only https, only images, and only up to a size a terminal can use.
+	// Loading an image confirms the address to the sender, so the caller
+	// asks first; this keeps the fetch from doing anything beyond that.
+	if !strings.HasPrefix(strings.ToLower(url), "https://") {
+		return nil, fmt.Errorf("only https images are loaded")
+	}
+	const maxImageBytes = 8 << 20
 	client := &http.Client{
 		Timeout: 10 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 3 {
+				return fmt.Errorf("too many redirects")
+			}
+			if req.URL.Scheme != "https" {
+				return fmt.Errorf("redirect to a non-https address")
+			}
+			return nil
+		},
 	}
-	
+
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to download image: %s", resp.Status)
 	}
-	
-	return io.ReadAll(resp.Body)
+	if ct := strings.ToLower(resp.Header.Get("Content-Type")); !strings.HasPrefix(ct, "image/") {
+		return nil, fmt.Errorf("not an image: %s", ct)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxImageBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxImageBytes {
+		return nil, fmt.Errorf("image larger than %d MB", maxImageBytes>>20)
+	}
+	return data, nil
 }
 
 // RenderImage renders an image to the terminal using the best available protocol
 func RenderImage(imageData []byte, maxWidth, maxHeight int) (string, error) {
 	cap := DetectCapability()
-	
+
 	if cap == CapNone {
 		return "", fmt.Errorf("terminal does not support inline images")
 	}
@@ -140,7 +166,7 @@ func RenderImage(imageData []byte, maxWidth, maxHeight int) (string, error) {
 		return "", err
 	}
 	defer os.Remove(tmpFile.Name())
-	
+
 	if _, err := tmpFile.Write(imageData); err != nil {
 		tmpFile.Close()
 		return "", err
@@ -195,7 +221,7 @@ func RenderImageFromURL(url string, maxWidth, maxHeight int) (string, error) {
 // OpenInBrowser opens a URL or file in the default browser
 func OpenInBrowser(url string) error {
 	var cmd *exec.Cmd
-	
+
 	switch runtime.GOOS {
 	case "darwin":
 		cmd = exec.Command("open", url)
@@ -204,26 +230,43 @@ func OpenInBrowser(url string) error {
 	default: // Linux and others
 		cmd = exec.Command("xdg-open", url)
 	}
-	
+
 	return cmd.Start()
 }
 
-// OpenHTMLInBrowser saves HTML content to a temp file and opens it in browser
+// browserCSP keeps an email's HTML from running scripts or loading anything
+// but images and inline styles once it is opened in the browser.
+const browserCSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src data:">`
+
+// OpenHTMLInBrowser writes the email's HTML to one private file under the
+// user's cache directory — replaced on every use, removed again after ten
+// minutes — with a Content-Security-Policy that disables scripts, and opens
+// it in the browser.
 func OpenHTMLInBrowser(html string) error {
-	tmpFile, err := os.CreateTemp("", "fm-cli-email-*.html")
+	cache, err := os.UserCacheDir()
 	if err != nil {
 		return err
 	}
-	
-	if _, err := tmpFile.WriteString(html); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
+	dir := filepath.Join(cache, "fm-cli")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	tmpFile.Close()
-	
-	// Open in browser (file will be cleaned up later or by OS)
-	return OpenInBrowser("file://" + tmpFile.Name())
+	path := filepath.Join(dir, "preview.html")
+	document := injectCSP(html)
+	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {
+		return err
+	}
+	time.AfterFunc(10*time.Minute, func() { _ = os.Remove(path) })
+	return OpenInBrowser("file://" + path)
+}
+
+var headTag = regexp.MustCompile(`(?i)<head[^>]*>`)
+
+func injectCSP(html string) string {
+	if loc := headTag.FindStringIndex(html); loc != nil {
+		return html[:loc[1]] + browserCSP + html[loc[1]:]
+	}
+	return "<!doctype html><html><head>" + browserCSP + "</head><body>" + html + "</body></html>"
 }
 
 // HasGraphicsSupport returns true if the terminal supports any image protocol

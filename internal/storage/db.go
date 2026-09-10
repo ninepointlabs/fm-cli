@@ -45,6 +45,10 @@ func Open() (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+	// Cached mail is private to the user, not just to the directory.
+	if err := db.Ping(); err == nil {
+		_ = os.Chmod(dbPath, 0o600)
+	}
 
 	storage := &DB{db: db}
 	if err := storage.migrate(); err != nil {

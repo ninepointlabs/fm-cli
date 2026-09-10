@@ -2,48 +2,24 @@ package api
 
 import (
 	"fmt"
-	"net/http"
 	netmail "net/mail"
 	"sort"
 	"strings"
 
 	"fm-cli/internal/model"
 
-	md "github.com/JohannesKaufmann/html-to-markdown"
 	"git.sr.ht/~rockorager/go-jmap"
 	"git.sr.ht/~rockorager/go-jmap/mail"
 	"git.sr.ht/~rockorager/go-jmap/mail/email"
 	"git.sr.ht/~rockorager/go-jmap/mail/emailsubmission"
 	"git.sr.ht/~rockorager/go-jmap/mail/identity"
 	"git.sr.ht/~rockorager/go-jmap/mail/mailbox"
+	md "github.com/JohannesKaufmann/html-to-markdown"
 )
 
 type Client struct {
 	Client  *jmap.Client
 	Session *jmap.Session
-}
-
-const FastmailSessionURL = "https://api.fastmail.com/.well-known/jmap"
-
-// NewClient initializes a JMAP client with the given token.
-func NewClient(token string) (*Client, error) {
-	// Initialize the JMAP client
-	c := &jmap.Client{
-		SessionEndpoint: FastmailSessionURL,
-		HttpClient:      &http.Client{},
-	}
-	c.WithAccessToken(token)
-
-	// Phase 1: Authentication & Session Discovery
-	// We fetch the session object to discover capabilities and URLs.
-	if err := c.Authenticate(); err != nil {
-		return nil, fmt.Errorf("failed to authenticate: %w", err)
-	}
-
-	return &Client{
-		Client:  c,
-		Session: c.Session,
-	}, nil
 }
 
 // DebugSession prints session info for debugging
@@ -177,54 +153,7 @@ func (c *Client) FetchEmails(mailboxID string, position int) ([]model.Email, err
 	for _, inv := range resp2.Responses {
 		if res, ok := inv.Args.(*email.GetResponse); ok {
 			for _, e := range res.List {
-				// Convert to model.Email
-				sender := formatAddresses(e.From)
-				to := formatAddresses(e.To)
-				cc := formatAddresses(e.CC)
-				bcc := formatAddresses(e.BCC)
-				replyTo := formatAddresses(e.ReplyTo)
-
-				isUnread := true
-				if _, ok := e.Keywords["$seen"]; ok {
-					isUnread = false
-				}
-				
-				isFlagged := false
-				if _, ok := e.Keywords["$flagged"]; ok {
-					isFlagged = true
-				}
-
-				isDraft := false
-				if _, ok := e.Keywords["$draft"]; ok {
-					isDraft = true
-				}
-
-				var boxIDs []string
-				for k := range e.MailboxIDs {
-					boxIDs = append(boxIDs, string(k))
-				}
-
-				dateStr := ""
-				if e.ReceivedAt != nil {
-					dateStr = e.ReceivedAt.Format("2006-01-02 15:04")
-				}
-
-				emails = append(emails, model.Email{
-					ID:         string(e.ID),
-					Subject:    e.Subject,
-					From:       sender,
-					To:         to,
-					Cc:         cc,
-					Bcc:        bcc,
-					ReplyTo:    replyTo,
-					Preview:    e.Preview,
-					Date:       dateStr,
-					IsUnread:   isUnread,
-					IsFlagged:  isFlagged,
-					IsDraft:    isDraft,
-					ThreadID:   string(e.ThreadID),
-					MailboxIDs: boxIDs,
-				})
+				emails = append(emails, toModelEmail(e))
 			}
 		}
 	}
@@ -286,53 +215,7 @@ func (c *Client) SearchEmails(query string, limit int) ([]model.Email, error) {
 	for _, inv := range resp2.Responses {
 		if res, ok := inv.Args.(*email.GetResponse); ok {
 			for _, e := range res.List {
-				sender := formatAddresses(e.From)
-				to := formatAddresses(e.To)
-				cc := formatAddresses(e.CC)
-				bcc := formatAddresses(e.BCC)
-				replyTo := formatAddresses(e.ReplyTo)
-
-				isUnread := true
-				if _, ok := e.Keywords["$seen"]; ok {
-					isUnread = false
-				}
-
-				isFlagged := false
-				if _, ok := e.Keywords["$flagged"]; ok {
-					isFlagged = true
-				}
-
-				isDraft := false
-				if _, ok := e.Keywords["$draft"]; ok {
-					isDraft = true
-				}
-
-				var boxIDs []string
-				for k := range e.MailboxIDs {
-					boxIDs = append(boxIDs, string(k))
-				}
-
-				dateStr := ""
-				if e.ReceivedAt != nil {
-					dateStr = e.ReceivedAt.Format("2006-01-02 15:04")
-				}
-
-				emails = append(emails, model.Email{
-					ID:         string(e.ID),
-					Subject:    e.Subject,
-					From:       sender,
-					To:         to,
-					Cc:         cc,
-					Bcc:        bcc,
-					ReplyTo:    replyTo,
-					Preview:    e.Preview,
-					Date:       dateStr,
-					IsUnread:   isUnread,
-					IsFlagged:  isFlagged,
-					IsDraft:    isDraft,
-					ThreadID:   string(e.ThreadID),
-					MailboxIDs: boxIDs,
-				})
+				emails = append(emails, toModelEmail(e))
 			}
 		}
 	}
@@ -364,7 +247,7 @@ func (c *Client) FetchEmailBody(emailID string) (string, error) {
 				// 1. Try Plain Text
 				for _, part := range e.TextBody {
 					if val, ok := e.BodyValues[part.PartID]; ok {
-						return val.Value, nil
+						return CleanText(val.Value), nil
 					}
 				}
 
@@ -372,13 +255,13 @@ func (c *Client) FetchEmailBody(emailID string) (string, error) {
 				for _, part := range e.HTMLBody {
 					if val, ok := e.BodyValues[part.PartID]; ok {
 						converter := md.NewConverter("", true, nil)
-						text, err := converter.ConvertString(val.Value)
+						text, err := converter.ConvertString(CleanText(val.Value))
 						if err != nil {
 							// Fallback to raw HTML (well, partial)
-							return "[HTML Convert Error] " + val.Value, nil
+							return "[HTML Convert Error] " + CleanText(val.Value), nil
 						}
 						// Add a header to indicate converted content
-						return "[Converted HTML]\n" + text, nil
+						return "[Converted HTML]\n" + CleanText(text), nil
 					}
 				}
 
@@ -422,16 +305,16 @@ func (c *Client) FetchEmailHTMLBody(emailID string) (string, error) {
 
 // GetMailboxIDByRole finds a mailbox ID by its role (e.g., "drafts", "sent").
 func (c *Client) GetMailboxIDByRole(role string) (string, error) {
-mbs, err := c.FetchMailboxes()
-if err != nil {
-return "", err
-}
-for _, mb := range mbs {
-if mb.Role == role {
-return mb.ID, nil
-}
-}
-return "", fmt.Errorf("mailbox with role %s not found", role)
+	mbs, err := c.FetchMailboxes()
+	if err != nil {
+		return "", err
+	}
+	for _, mb := range mbs {
+		if mb.Role == role {
+			return mb.ID, nil
+		}
+	}
+	return "", fmt.Errorf("mailbox with role %s not found", role)
 }
 
 // DeleteEmail moves an email to Trash (or deletes it).
@@ -448,12 +331,12 @@ func (c *Client) DeleteEmail(emailID string) error {
 // MoveEmail moves an email from one mailbox to another.
 func (c *Client) MoveEmail(emailID, fromMailboxID, toMailboxID string) error {
 	req := &jmap.Request{}
-	
+
 	patch := map[string]interface{}{
 		"mailboxIds/" + toMailboxID: true,
 	}
 	if fromMailboxID != "" && fromMailboxID != toMailboxID {
-		patch["mailboxIds/" + fromMailboxID] = nil
+		patch["mailboxIds/"+fromMailboxID] = nil
 	}
 
 	req.Invoke(&email.Set{
@@ -469,7 +352,7 @@ func (c *Client) MoveEmail(emailID, fromMailboxID, toMailboxID string) error {
 // SetUnread toggles the $seen keyword.
 func (c *Client) SetUnread(emailID string, isUnread bool) error {
 	req := &jmap.Request{}
-	
+
 	patch := map[string]interface{}{}
 	if isUnread {
 		patch["keywords/$seen"] = nil // Remove $seen to mark unread
@@ -490,7 +373,7 @@ func (c *Client) SetUnread(emailID string, isUnread bool) error {
 // SetFlagged toggles the $flagged keyword.
 func (c *Client) SetFlagged(emailID string, isFlagged bool) error {
 	req := &jmap.Request{}
-	
+
 	patch := map[string]interface{}{}
 	if isFlagged {
 		patch["keywords/$flagged"] = true
@@ -574,10 +457,10 @@ func (c *Client) SaveDraft(existingDraftID, from, to, subject, body string) erro
 		toEmail = parsedTo.Address
 		toName = parsedTo.Name
 	}
-	
+
 	// Always use a new creation ID
 	creationID := jmap.ID("draft-0")
-	
+
 	emailObj := &email.Email{
 		From:    []*mail.Address{{Email: from}},
 		To:      []*mail.Address{{Name: toName, Email: toEmail}},
@@ -641,7 +524,7 @@ func (c *Client) SaveDraft(existingDraftID, from, to, subject, body string) erro
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -653,7 +536,7 @@ func (c *Client) SendEmail(existingDraftID, from, to, subject, body string) erro
 	to = strings.TrimSpace(to)
 	var toAddresses []*netmail.Address
 	var rcptTo []*emailsubmission.Address
-	
+
 	// Try parsing as address list first
 	if parsed, err := netmail.ParseAddressList(to); err == nil {
 		toAddresses = parsed
@@ -664,12 +547,12 @@ func (c *Client) SendEmail(existingDraftID, from, to, subject, body string) erro
 		// Fallback: treat as plain email
 		toAddresses = []*netmail.Address{{Address: to}}
 	}
-	
+
 	// Build recipient list for submission envelope
 	for _, addr := range toAddresses {
 		rcptTo = append(rcptTo, &emailsubmission.Address{Email: addr.Address})
 	}
-	
+
 	// Convert to mail.Address for Email object
 	var mailToAddrs []*mail.Address
 	for _, addr := range toAddresses {
@@ -702,12 +585,12 @@ func (c *Client) SendEmail(existingDraftID, from, to, subject, body string) erro
 			identityID = identities[0].ID
 		}
 	}
-	
+
 	draftsID, err := c.GetMailboxIDByRole("drafts")
 	if err != nil {
 		return fmt.Errorf("could not find Drafts folder: %w", err)
 	}
-	
+
 	sentID, err := c.GetMailboxIDByRole("sent")
 	if err != nil {
 		return fmt.Errorf("could not find Sent folder: %w", err)
@@ -716,7 +599,7 @@ func (c *Client) SendEmail(existingDraftID, from, to, subject, body string) erro
 	// 1. Prepare Email Object
 	// Create in Drafts first - only move to Sent on successful submission
 	creationID := jmap.ID("draft-0")
-	
+
 	// Create in Drafts first - only move to Sent on successful submission
 	emailObj := &email.Email{
 		From:    []*mail.Address{{Email: from}},
@@ -737,7 +620,7 @@ func (c *Client) SendEmail(existingDraftID, from, to, subject, body string) erro
 
 	// 2. Prepare Submission Object
 	submitID := jmap.ID("submit-0")
-	
+
 	submissionObj := &emailsubmission.EmailSubmission{
 		EmailID:    jmap.ID("#" + string(creationID)),
 		IdentityID: identityID,
@@ -782,82 +665,81 @@ func (c *Client) SendEmail(existingDraftID, from, to, subject, body string) erro
 		},
 	})
 
-resp, err := c.Client.Do(req)
-if err != nil {
-return fmt.Errorf("JMAP request failed: %w", err)
-}
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return fmt.Errorf("JMAP request failed: %w", err)
+	}
 
-// Check response for errors
-for _, inv := range resp.Responses {
-if methodErr, ok := inv.Args.(*jmap.MethodError); ok {
-// Log full error object for debugging
-desc := ""
-if methodErr.Description != nil {
-desc = *methodErr.Description
-}
-return fmt.Errorf("method error in %s: %s (desc: %s)", inv.Name, methodErr.Type, desc)
-}
-// Also check SetResponse for NotCreated and NotDestroyed
-if setResp, ok := inv.Args.(*email.SetResponse); ok {
-if len(setResp.NotDestroyed) > 0 {
-var errs []string
-for id, errObj := range setResp.NotDestroyed {
-desc := ""
-if errObj.Description != nil {
-desc = *errObj.Description
-}
-errs = append(errs, fmt.Sprintf("ID %s: %s (%s)", id, errObj.Type, desc))
-}
-return fmt.Errorf("failed to destroy email: %s", strings.Join(errs, "; "))
-}
-if len(setResp.NotCreated) > 0 {
-var errs []string
-for id, errObj := range setResp.NotCreated {
-desc := ""
-if errObj.Description != nil {
-desc = *errObj.Description
-}
-props := ""
-if errObj.Properties != nil {
-props = fmt.Sprintf(" [props: %v]", *errObj.Properties)
-}
-errs = append(errs, fmt.Sprintf("ID %s: %s (%s)%s", id, errObj.Type, desc, props))
-}
-return fmt.Errorf("failed to create email (from: %s): %s", from, strings.Join(errs, "; "))
-}
-}
-if subResp, ok := inv.Args.(*emailsubmission.SetResponse); ok {
-if len(subResp.NotCreated) > 0 {
-var errs []string
-for id, errObj := range subResp.NotCreated {
-desc := ""
-if errObj.Description != nil {
-desc = *errObj.Description
-}
-errs = append(errs, fmt.Sprintf("ID %s: %s (%s)", id, errObj.Type, desc))
-}
-// Build recipient list for error message
-var toList []string
-for _, addr := range toAddresses {
-toList = append(toList, addr.Address)
-}
-return fmt.Errorf("failed to submit email (from: %s, to: %v): %s", from, toList, strings.Join(errs, "; "))
-}
-}
-}
+	// Check response for errors
+	for _, inv := range resp.Responses {
+		if methodErr, ok := inv.Args.(*jmap.MethodError); ok {
+			// Log full error object for debugging
+			desc := ""
+			if methodErr.Description != nil {
+				desc = *methodErr.Description
+			}
+			return fmt.Errorf("method error in %s: %s (desc: %s)", inv.Name, methodErr.Type, desc)
+		}
+		// Also check SetResponse for NotCreated and NotDestroyed
+		if setResp, ok := inv.Args.(*email.SetResponse); ok {
+			if len(setResp.NotDestroyed) > 0 {
+				var errs []string
+				for id, errObj := range setResp.NotDestroyed {
+					desc := ""
+					if errObj.Description != nil {
+						desc = *errObj.Description
+					}
+					errs = append(errs, fmt.Sprintf("ID %s: %s (%s)", id, errObj.Type, desc))
+				}
+				return fmt.Errorf("failed to destroy email: %s", strings.Join(errs, "; "))
+			}
+			if len(setResp.NotCreated) > 0 {
+				var errs []string
+				for id, errObj := range setResp.NotCreated {
+					desc := ""
+					if errObj.Description != nil {
+						desc = *errObj.Description
+					}
+					props := ""
+					if errObj.Properties != nil {
+						props = fmt.Sprintf(" [props: %v]", *errObj.Properties)
+					}
+					errs = append(errs, fmt.Sprintf("ID %s: %s (%s)%s", id, errObj.Type, desc, props))
+				}
+				return fmt.Errorf("failed to create email (from: %s): %s", from, strings.Join(errs, "; "))
+			}
+		}
+		if subResp, ok := inv.Args.(*emailsubmission.SetResponse); ok {
+			if len(subResp.NotCreated) > 0 {
+				var errs []string
+				for id, errObj := range subResp.NotCreated {
+					desc := ""
+					if errObj.Description != nil {
+						desc = *errObj.Description
+					}
+					errs = append(errs, fmt.Sprintf("ID %s: %s (%s)", id, errObj.Type, desc))
+				}
+				// Build recipient list for error message
+				var toList []string
+				for _, addr := range toAddresses {
+					toList = append(toList, addr.Address)
+				}
+				return fmt.Errorf("failed to submit email (from: %s, to: %v): %s", from, toList, strings.Join(errs, "; "))
+			}
+		}
+	}
 
-return nil
+	return nil
 }
 
 func formatAddresses(addrs []*mail.Address) string {
-var parts []string
-for _, a := range addrs {
-if a.Name != "" {
-parts = append(parts, fmt.Sprintf("%s <%s>", a.Name, a.Email))
-} else {
-parts = append(parts, a.Email)
+	var parts []string
+	for _, a := range addrs {
+		if a.Name != "" {
+			parts = append(parts, fmt.Sprintf("%s <%s>", a.Name, a.Email))
+		} else {
+			parts = append(parts, a.Email)
+		}
+	}
+	return strings.Join(parts, ", ")
 }
-}
-return strings.Join(parts, ", ")
-}
-

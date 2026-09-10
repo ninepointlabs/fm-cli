@@ -4,7 +4,7 @@ project_name: fm-cli
 
 before:
   hooks:
-    - go mod tidy
+    - go mod verify
 
 builds:
   - main: ./cmd/fm-cli
@@ -32,9 +32,9 @@ archives:
 nfpms:
   - id: packages
     package_name: fm-cli
-    vendor: Tim Apple
-    homepage: https://github.com/timappledotcom/fm-cli
-    maintainer: Tim Apple
+    vendor: Ninepoint Labs
+    homepage: https://github.com/ninepointlabs/fm-cli
+    maintainer: Ninepoint Labs <tim@ninepointlabs.com>
     description: Terminal-based TUI for Fastmail
     license: MIT
     formats:
@@ -50,7 +50,7 @@ nfpms:
 # AUR publishing disabled - requires AUR_SSH_KEY secret
 # aurs:
 #   - name: fm-cli-bin
-#     homepage: https://github.com/timappledotcom/fm-cli
+#     homepage: https://github.com/ninepointlabs/fm-cli
 #     description: Terminal-based TUI for Fastmail
 #     maintainers:
 #       - "Tim Apple"
@@ -76,7 +76,7 @@ changelog:
 
 release:
   github:
-    owner: timappledotcom
+    owner: ninepointlabs
     name: fm-cli
   draft: false
   prerelease: auto

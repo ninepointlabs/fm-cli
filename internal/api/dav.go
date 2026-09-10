@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -19,10 +20,10 @@ import (
 
 // DAVClient holds CalDAV and CardDAV clients
 type DAVClient struct {
-	CalDAV       *caldav.Client
-	CardDAV      *carddav.Client
-	httpClient   webdav.HTTPClient
-	email        string
+	CalDAV     *caldav.Client
+	CardDAV    *carddav.Client
+	httpClient webdav.HTTPClient
+	email      string
 }
 
 // NewDAVClient creates CalDAV/CardDAV clients with app password auth
@@ -30,8 +31,9 @@ func NewDAVClient(email, appPassword string) (*DAVClient, error) {
 	httpClient := webdav.HTTPClientWithBasicAuth(nil, email, appPassword)
 
 	// Fastmail CalDAV/CardDAV endpoints with principal path
-	calURL := "https://caldav.fastmail.com/dav/principals/user/" + email + "/"
-	cardURL := "https://carddav.fastmail.com/dav/principals/user/" + email + "/"
+	principal := url.PathEscape(email)
+	calURL := "https://caldav.fastmail.com/dav/principals/user/" + principal + "/"
+	cardURL := "https://carddav.fastmail.com/dav/principals/user/" + principal + "/"
 
 	calClient, err := caldav.NewClient(httpClient, calURL)
 	if err != nil {
@@ -587,7 +589,7 @@ func (d *DAVClient) CreateContact(ctx context.Context, contact model.Contact) (s
 
 	uid := fmt.Sprintf("%d@fm-cli", time.Now().UnixNano())
 	card.SetValue(vcard.FieldUID, uid)
-	
+
 	// FN (Formatted Name) is required
 	fn := contact.FullName
 	if fn == "" {
@@ -687,7 +689,7 @@ func (d *DAVClient) UpdateContact(ctx context.Context, contact model.Contact) er
 
 	// Start with the existing card
 	card := objects[0].Card
-	
+
 	// Update the fields that can be edited
 	// FN (Formatted Name) is required
 	fn := contact.FullName
@@ -715,13 +717,13 @@ func (d *DAVClient) UpdateContact(ctx context.Context, contact model.Contact) er
 	} else {
 		delete(card, vcard.FieldNickname)
 	}
-	
+
 	if contact.Company != "" {
 		card.SetValue(vcard.FieldOrganization, contact.Company)
 	} else {
 		delete(card, vcard.FieldOrganization)
 	}
-	
+
 	if contact.JobTitle != "" {
 		card.SetValue(vcard.FieldTitle, contact.JobTitle)
 	} else {

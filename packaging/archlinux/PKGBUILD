@@ -4,7 +4,7 @@ pkgver=0.2.4
 pkgrel=1
 pkgdesc="A minimalist terminal-based TUI for Fastmail"
 arch=('x86_64' 'aarch64')
-url="https://github.com/timappledotcom/fm-cli"
+url="https://github.com/ninepointlabs/fm-cli"
 license=('MIT')
 depends=('glibc')
 makedepends=('go>=1.21' 'git')

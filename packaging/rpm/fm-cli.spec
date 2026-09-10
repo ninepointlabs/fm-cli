@@ -4,7 +4,7 @@ Release:        1%{?dist}
 Summary:        Terminal-based TUI for Fastmail
 
 License:        MIT
-URL:            https://github.com/timappledotcom/fm-cli
+URL:            https://github.com/ninepointlabs/fm-cli
 Source0:        %{name}-%{version}.tar.gz
 
 %global debug_package %{nil}
