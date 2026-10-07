@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"encoding/xml"
 	"fmt"
+	"net/http"
 	"net/url"
 	"sort"
 	"strings"
@@ -17,6 +19,13 @@ import (
 	"github.com/emersion/go-webdav/carddav"
 )
 
+// Fastmail DAV context URLs (RFC 6764). The trailing slash matters: Cyrus
+// answers PROPFIND on the bare /dav path with 405.
+const (
+	calDAVEndpoint  = "https://caldav.fastmail.com/dav/"
+	cardDAVEndpoint = "https://carddav.fastmail.com/dav/"
+)
+
 // DAVClient holds CalDAV and CardDAV clients
 type DAVClient struct {
 	CalDAV     *caldav.Client
@@ -25,21 +34,75 @@ type DAVClient struct {
 	email      string
 }
 
+// discoverCurrentUserPrincipal asks the DAV context URL for the
+// current-user-principal href (RFC 6764 bootstrapping step 4). The principal
+// path is not derivable from the login email -- Cyrus folds dots to
+// underscores in the mailbox name -- so it must come from the server.
+//
+// go-webdav's Client.FindCurrentUserPrincipal would work, but it resolves the
+// request path with path.Join(endpoint.Path, ""), which strips the trailing
+// slash and PROPFINDs "/dav"; Cyrus rejects that with 405. Issuing the request
+// directly keeps the "/dav/" path Cyrus expects.
+func discoverCurrentUserPrincipal(ctx context.Context, httpClient webdav.HTTPClient, endpoint string) (string, error) {
+	const body = `<?xml version="1.0" encoding="utf-8"?>` +
+		`<propfind xmlns="DAV:"><prop><current-user-principal/></prop></propfind>`
+
+	req, err := http.NewRequestWithContext(ctx, "PROPFIND", endpoint, strings.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Depth", "0")
+	req.Header.Set("Content-Type", `application/xml; charset="utf-8"`)
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMultiStatus {
+		return "", fmt.Errorf("PROPFIND %s: %s", endpoint, resp.Status)
+	}
+
+	var ms struct {
+		Responses []struct {
+			PropStats []struct {
+				Prop struct {
+					CurrentUserPrincipal struct {
+						Href string `xml:"href"`
+					} `xml:"current-user-principal"`
+				} `xml:"prop"`
+			} `xml:"propstat"`
+		} `xml:"response"`
+	}
+	if err := xml.NewDecoder(resp.Body).Decode(&ms); err != nil {
+		return "", err
+	}
+	for _, r := range ms.Responses {
+		for _, ps := range r.PropStats {
+			href := strings.TrimSpace(ps.Prop.CurrentUserPrincipal.Href)
+			if href == "" {
+				continue
+			}
+			u, err := url.Parse(href)
+			if err != nil {
+				return "", err
+			}
+			return u.Path, nil
+		}
+	}
+	return "", fmt.Errorf("no current-user-principal in PROPFIND response from %s", endpoint)
+}
+
 // NewDAVClient creates CalDAV/CardDAV clients with app password auth
 func NewDAVClient(email, appPassword string) (*DAVClient, error) {
 	httpClient := webdav.HTTPClientWithBasicAuth(nil, email, appPassword)
 
-	// Fastmail CalDAV/CardDAV endpoints with principal path
-	principal := url.PathEscape(email)
-	calURL := "https://caldav.fastmail.com/dav/principals/user/" + principal + "/"
-	cardURL := "https://carddav.fastmail.com/dav/principals/user/" + principal + "/"
-
-	calClient, err := caldav.NewClient(httpClient, calURL)
+	calClient, err := caldav.NewClient(httpClient, calDAVEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CalDAV client: %w", err)
 	}
 
-	cardClient, err := carddav.NewClient(httpClient, cardURL)
+	cardClient, err := carddav.NewClient(httpClient, cardDAVEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CardDAV client: %w", err)
 	}
@@ -54,8 +117,8 @@ func NewDAVClient(email, appPassword string) (*DAVClient, error) {
 
 // FetchCalendars retrieves all calendars via CalDAV
 func (d *DAVClient) FetchCalendars(ctx context.Context) ([]model.Calendar, error) {
-	// Use principal discovery
-	principal, err := d.CalDAV.FindCurrentUserPrincipal(ctx)
+	// Discover the principal from the server rather than constructing it.
+	principal, err := discoverCurrentUserPrincipal(ctx, d.httpClient, calDAVEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find principal: %w", err)
 	}
@@ -354,8 +417,8 @@ func (d *DAVClient) DeleteEvent(ctx context.Context, eventPath string) error {
 
 // FetchAddressBooks retrieves all address books via CardDAV
 func (d *DAVClient) FetchAddressBooks(ctx context.Context) ([]model.AddressBook, error) {
-	// Use principal discovery
-	principal, err := d.CardDAV.FindCurrentUserPrincipal(ctx)
+	// Discover the principal from the server rather than constructing it.
+	principal, err := discoverCurrentUserPrincipal(ctx, d.httpClient, cardDAVEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find principal: %w", err)
 	}
