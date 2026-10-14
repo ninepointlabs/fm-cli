@@ -40,7 +40,7 @@ fm-cli --version
 fm-cli version
 ```
 
-Prints one line: `fm-cli version 0.3.4`.
+Prints one line: `fm-cli version 0.3.5`.
 
 ## Auth
 

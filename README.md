@@ -202,7 +202,7 @@ to start rather than knocking the first offline.
   browser preview in `~/.cache/fm-cli/preview.html`, replaced on each use and
   removed after ten minutes.
 - Dependencies are pinned in `go.mod`; `govulncheck ./...` runs clean as of
-  0.3.4. Releases are built by GitHub Actions from a tag, with the actions
+  0.3.5. Releases are built by GitHub Actions from a tag, with the actions
   pinned to commits.
 
 ## Offline mode and settings
