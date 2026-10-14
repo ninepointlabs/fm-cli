@@ -21,6 +21,12 @@ With mise elsewhere:
 mise use -g github:ninepointlabs/fm-cli@latest
 ```
 
+With [autonomix-cli](https://github.com/ninepointlabs/autonomix-cli):
+
+```bash
+autonomix-cli add https://github.com/ninepointlabs/fm-cli
+```
+
 Every [release](https://github.com/ninepointlabs/fm-cli/releases) also ships
 `.pkg.tar.zst`, `.deb` and `.rpm` packages and plain tarballs for Linux and
 macOS. From source:
@@ -196,7 +202,7 @@ to start rather than knocking the first offline.
   browser preview in `~/.cache/fm-cli/preview.html`, replaced on each use and
   removed after ten minutes.
 - Dependencies are pinned in `go.mod`; `govulncheck ./...` runs clean as of
-  0.3.3. Releases are built by GitHub Actions from a tag, with the actions
+  0.3.4. Releases are built by GitHub Actions from a tag, with the actions
   pinned to commits.
 
 ## Offline mode and settings
