@@ -65,7 +65,8 @@ fm-cli setup                  # sign in only if signed out
 Calendar and contacts use CalDAV and CardDAV, which need a Fastmail **app
 password** with *Mail, Contacts & Calendars* access; `fm-cli auth dav` stores
 it. For headless machines, `FM_API_TOKEN`, `FM_EMAIL` and `FM_APP_PASSWORD` in
-the environment stand in for the keyring.
+the environment stand in for the keyring. `FM_DEFAULT_FROM` picks the default
+sending identity; see [Default sending identity](#default-sending-identity).
 
 ## The terminal app
 
@@ -203,12 +204,24 @@ to start rather than knocking the first offline.
 ```bash
 fm-cli settings                 # show settings
 fm-cli settings offline on      # cache mail and bodies locally, draft offline
+fm-cli settings from me@example.com  # default sending identity
+fm-cli settings from off        # back to the first identity
 fm-cli sync                     # push queued offline changes
 fm-cli debug                    # dump the JMAP session and DAV status
 ```
 
 Calendar and contacts need a connection; only mail works offline. If you
 started offline and want to go online, restart the app.
+
+### Default sending identity
+
+By default, composes, drafts and sends go out from the first identity
+Fastmail's `Identity/get` returns, which is not necessarily the default you
+picked in the Fastmail web UI. To choose one, store it with `fm-cli settings
+from <address>` or set `FM_DEFAULT_FROM=<address>` in the environment; the
+environment wins over the stored setting. The address is matched against your
+identities ignoring case and surrounding spaces; if it matches none, the first
+identity is used. In the composer, `Tab` still cycles through the others.
 
 ## Troubleshooting
 

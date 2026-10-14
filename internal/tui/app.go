@@ -53,7 +53,10 @@ type editorFinishedMsg struct{ err error }
 type emailSentMsg struct{}
 type draftSavedMsg struct{}
 type emailDeletedMsg struct{}
-type identitiesLoadedMsg []string
+type identitiesLoadedMsg struct {
+	emails     []string
+	defaultIdx int // index of the preferred sending identity
+}
 type calendarsLoadedMsg []model.Calendar
 type eventsLoadedMsg []model.CalendarEvent
 type addressBooksLoadedMsg []model.AddressBook
@@ -442,7 +445,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case identitiesLoadedMsg:
-		m.identities = msg
+		m.identities = msg.emails
+		m.identityIdx = msg.defaultIdx
 		return m, nil
 
 	case draftSavedMsg, emailSentMsg:

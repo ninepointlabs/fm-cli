@@ -117,11 +117,15 @@ func fetchIdentitiesCmd(client *api.Client) tea.Cmd {
 		if err != nil {
 			return errorMsg(err)
 		}
-		var emails []string
-		for _, id := range identities {
-			emails = append(emails, id.Email)
+		msg := identitiesLoadedMsg{}
+		pref := client.PreferredIdentity(identities)
+		for i, id := range identities {
+			if id == pref {
+				msg.defaultIdx = i
+			}
+			msg.emails = append(msg.emails, id.Email)
 		}
-		return identitiesLoadedMsg(emails)
+		return msg
 	}
 }
 

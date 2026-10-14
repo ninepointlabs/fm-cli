@@ -250,3 +250,11 @@ func TestSenderName(t *testing.T) {
 		}
 	}
 }
+
+func TestIdentitiesLoadedSelectsPreferred(t *testing.T) {
+	m := testModel(100, 30)
+	m = send(t, m, identitiesLoadedMsg{emails: []string{"a@example.com", "b@example.com", "c@example.com"}, defaultIdx: 2})
+	if m.identityIdx != 2 || m.identities[m.identityIdx] != "c@example.com" {
+		t.Errorf("identityIdx = %d, identities = %v", m.identityIdx, m.identities)
+	}
+}

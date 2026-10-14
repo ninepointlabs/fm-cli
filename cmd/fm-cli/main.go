@@ -240,6 +240,9 @@ func runTUI(opts tuiOptions) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		client, err = connect(ctx)
 		cancel()
+		if err == nil && db != nil {
+			client.DefaultFrom, _ = db.GetConfig(defaultFromKey)
+		}
 		if err != nil {
 			fmt.Printf("Failed to connect to server: %v\n", err)
 			if db != nil {
@@ -276,6 +279,10 @@ func runTUI(opts tuiOptions) {
 	}
 }
 
+// defaultFromKey stores the default sending address; FM_DEFAULT_FROM
+// overrides it.
+const defaultFromKey = "default_from"
+
 func settings() {
 	db, err := storage.Open()
 	if err != nil {
@@ -287,11 +294,18 @@ func settings() {
 	if len(os.Args) < 3 {
 		// Show current settings
 		offlineMode, _ := db.GetConfig("offline_mode")
+		defaultFrom, _ := db.GetConfig(defaultFromKey)
 		fmt.Println("Current Settings:")
 		fmt.Printf("  offline_mode: %s\n", boolStr(offlineMode))
+		fmt.Printf("  from:         %s\n", fromStr(defaultFrom))
+		if env := strings.TrimSpace(os.Getenv(api.DefaultFromEnv)); env != "" {
+			fmt.Printf("                (overridden by %s=%s)\n", api.DefaultFromEnv, env)
+		}
 		fmt.Println("\nUsage:")
-		fmt.Println("  fm-cli settings offline on   - Enable offline mode (store emails locally)")
-		fmt.Println("  fm-cli settings offline off  - Disable offline mode")
+		fmt.Println("  fm-cli settings offline on      - Enable offline mode (store emails locally)")
+		fmt.Println("  fm-cli settings offline off     - Disable offline mode")
+		fmt.Println("  fm-cli settings from <address>  - Default sending identity")
+		fmt.Println("  fm-cli settings from off        - Use the first identity Fastmail lists")
 		return
 	}
 
@@ -311,9 +325,29 @@ func settings() {
 		default:
 			fmt.Println("Usage: fm-cli settings offline [on|off]")
 		}
+	case "from":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: fm-cli settings from [<address>|off]")
+			return
+		}
+		switch addr := strings.TrimSpace(os.Args[3]); addr {
+		case "off", "":
+			db.SetConfig(defaultFromKey, "")
+			fmt.Println("Default sending identity cleared. The first identity is used.")
+		default:
+			db.SetConfig(defaultFromKey, addr)
+			fmt.Printf("Default sending identity set to %s. If it matches no identity, the first one is used.\n", addr)
+		}
 	default:
 		fmt.Printf("Unknown setting: %s\n", os.Args[2])
 	}
+}
+
+func fromStr(val string) string {
+	if val == "" {
+		return "(first identity)"
+	}
+	return val
 }
 
 func boolStr(val string) string {
@@ -352,6 +386,7 @@ func syncNow() {
 		fmt.Printf("Failed to connect: %v\n", err)
 		return
 	}
+	client.DefaultFrom, _ = db.GetConfig(defaultFromKey)
 
 	fmt.Printf("Syncing %d pending action(s)...\n", len(actions))
 
