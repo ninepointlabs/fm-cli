@@ -20,6 +20,9 @@ import (
 type Client struct {
 	Client  *jmap.Client
 	Session *jmap.Session
+	// DefaultFrom is the stored default sending address; FM_DEFAULT_FROM
+	// overrides it. See PreferredIdentity.
+	DefaultFrom string
 }
 
 // DebugSession prints session info for debugging
@@ -391,7 +394,8 @@ func (c *Client) SetFlagged(emailID string, isFlagged bool) error {
 	return err
 }
 
-// GetDefaultIdentity retrieves the first available identity.
+// GetDefaultIdentity retrieves the preferred identity, falling back to the
+// first available one.
 func (c *Client) GetDefaultIdentity() (*identity.Identity, error) {
 	identities, err := c.GetIdentities()
 	if err != nil {
@@ -400,7 +404,7 @@ func (c *Client) GetDefaultIdentity() (*identity.Identity, error) {
 	if len(identities) == 0 {
 		return nil, fmt.Errorf("no identities found")
 	}
-	return identities[0], nil
+	return c.PreferredIdentity(identities), nil
 }
 
 // GetIdentities retrieves all available sending identities.
@@ -568,10 +572,11 @@ func (c *Client) SendEmail(existingDraftID, from, to, subject, body string) erro
 		return fmt.Errorf("no sending identities configured")
 	}
 
-	// Find matching identity for the from address, or use first one
+	// Find matching identity for the from address, or use the preferred one
 	if from == "" {
-		from = identities[0].Email
-		identityID = identities[0].ID
+		ident := c.PreferredIdentity(identities)
+		from = ident.Email
+		identityID = ident.ID
 	} else {
 		// Find identity matching the from address
 		for _, ident := range identities {
