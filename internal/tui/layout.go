@@ -225,6 +225,8 @@ func (m Model) breadcrumb() string {
 		return "Contacts"
 	case viewSettings:
 		return "Settings"
+	case viewAbout:
+		return "About"
 	}
 	return ""
 }

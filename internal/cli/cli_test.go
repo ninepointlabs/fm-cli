@@ -50,7 +50,7 @@ func TestParseEvents(t *testing.T) {
 }
 
 func TestHandled(t *testing.T) {
-	for _, argv := range [][]string{{"version"}, {"auth", "status", "--json"}, {"bogus"}, {"--version"}, {"--wat"}} {
+	for _, argv := range [][]string{{"version"}, {"about"}, {"auth", "status", "--json"}, {"bogus"}, {"--version"}, {"--wat"}} {
 		if !Handled(argv) {
 			t.Errorf("%v should be handled", argv)
 		}
@@ -130,5 +130,23 @@ func TestBoxUsageErrors(t *testing.T) {
 		if code := app.Run(context.Background(), argv); code != ExitUsage {
 			t.Errorf("%v: exit %d, stderr %s", argv, code, stderr.String())
 		}
+	}
+}
+
+func TestAbout(t *testing.T) {
+	var stdout bytes.Buffer
+	app := &App{Stdout: &stdout, Stderr: &bytes.Buffer{}}
+	if code := app.Run(context.Background(), []string{"about", "--json"}); code != ExitOK {
+		t.Fatalf("exit %d", code)
+	}
+	var env struct {
+		OK   bool              `json:"ok"`
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil || !env.OK {
+		t.Fatalf("not an ok envelope: %q", stdout.String())
+	}
+	if env.Data["organization"] != "Nine Point Labs" || env.Data["support"] != "help@ninepointlabs.com" || env.Data["privacy"] == "" {
+		t.Fatalf("data: %v", env.Data)
 	}
 }

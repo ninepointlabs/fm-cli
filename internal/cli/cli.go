@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"fm-cli/internal/about"
 	"fm-cli/internal/api"
 	"fm-cli/internal/auth"
 )
@@ -302,6 +303,8 @@ func (app *App) dispatch(ctx context.Context, a *Args) (*Result, error) {
 	switch cmd {
 	case "version":
 		return &Result{Data: map[string]string{"version": Version}, Text: "fm-cli version " + Version}, nil
+	case "about":
+		return aboutResult(), nil
 	case "auth":
 		switch sub {
 		case "status":
@@ -396,6 +399,7 @@ MAIL
 OTHER
   settings | sync | debug               Offline mode, pending actions, session dump
   version                               Print the version
+  about                                 Who makes fm-cli, license, support, privacy
 
 FLAGS
   --account ID|all   Select a mail account (default: the primary account)
@@ -445,4 +449,18 @@ func selectAccounts(client *api.Client, selector string) ([]api.AccountInfo, err
 		}
 	}
 	return nil, &Error{Code: "usage", Message: fmt.Sprintf("unknown account %q", selector)}
+}
+
+// aboutResult is `fm-cli about`: the About screen as text, or its facts as
+// JSON.
+func aboutResult() *Result {
+	return &Result{
+		Data: map[string]string{
+			"name": about.Name, "version": about.Version, "tagline": about.Tagline,
+			"organization": about.Organization, "created": about.Created,
+			"license": about.LicenseName, "copyright": about.Copyright,
+			"support": about.SupportEmail, "privacy": about.Privacy, "built_with": about.BuiltWith(),
+		},
+		Text: about.Text(),
+	}
 }

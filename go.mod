@@ -6,6 +6,7 @@ require (
 	git.sr.ht/~rockorager/go-jmap v0.5.3
 	github.com/99designs/keyring v1.2.2
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
+	github.com/atotto/clipboard v0.1.4
 	github.com/blacktop/go-termimg v0.1.24
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
@@ -23,7 +24,6 @@ require (
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/PuerkitoBio/goquery v1.9.2 // indirect
 	github.com/andybalholm/cascadia v1.3.2 // indirect
-	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/colorprofile v0.3.3 // indirect
 	github.com/charmbracelet/x/ansi v0.11.0 // indirect

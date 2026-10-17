@@ -31,6 +31,7 @@ const (
 	viewContacts
 	viewSettings
 	viewSearch // Global email search
+	viewAbout
 )
 
 // MainMenuItem represents an option in the main menu
@@ -88,6 +89,7 @@ var mainMenuItems = []MainMenuItem{
 	{Name: "Calendar", Shortcut: "2", State: viewCalendar},
 	{Name: "Contacts", Shortcut: "3", State: viewContacts},
 	{Name: "Settings", Shortcut: "4", State: viewSettings},
+	{Name: "About", Shortcut: "5", State: viewAbout},
 }
 
 // Model implementation
@@ -170,6 +172,11 @@ type Model struct {
 
 	// Settings
 	settingsCursor int
+
+	// About
+	aboutShowLicense bool
+	aboutScroll      int
+	aboutStatus      string
 
 	err    error
 	width  int
@@ -510,6 +517,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = true
 			return m, fetchContactsCmd(m.davClient, ab, 500)
 		}
+		return m, nil
+
+	case aboutStatusMsg:
+		m.aboutStatus = string(msg)
 		return m, nil
 
 	case errorMsg:
@@ -898,6 +909,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.state == viewAbout {
+		if next, cmd, ok := m.updateAbout(keyMsg); ok {
+			return next, cmd
+		}
+	}
+
 	switch keyMsg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
@@ -923,6 +940,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = viewSettings
 		m.clearFilter()
 		return m, nil
+	case "5":
+		return m.goAbout()
 
 	case "d", "backspace":
 		switch m.state {
@@ -1138,6 +1157,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.goContacts()
 			case viewSettings:
 				m.state = viewSettings
+			case viewAbout:
+				return m.goAbout()
 			}
 			return m, nil
 
