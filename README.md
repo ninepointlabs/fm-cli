@@ -92,7 +92,7 @@ offline mode that caches mail in SQLite.
 
 | Everywhere | |
 |---|---|
-| `0` `1` `2` `3` `4` | Main menu, Mail, Calendar, Contacts, Settings |
+| `0` `1` `2` `3` `4` `5` | Main menu, Mail, Calendar, Contacts, Settings, About |
 | `j` `k` or arrows | Move |
 | `Enter` `l` | Open |
 | `h` `Esc` | Back |
@@ -125,6 +125,13 @@ offline mode that caches mail in SQLite.
 | `y` `s` `e` `n` | Send, save as draft, edit body, cancel |
 
 Calendar and contacts: `n` new, `e` edit, `d` delete from the detail view.
+
+**About** (the last item on the main menu, or `5` from anywhere) shows the
+version, Nine Point Labs, the license, what fm-cli does with your data and
+the support address, [help@ninepointlabs.com](mailto:help@ninepointlabs.com).
+There, `l` shows the full license, `e` starts an email to support with the
+version details filled in, `c` copies the address and `v` the version
+details. `fm-cli about` prints the same from the command line.
 
 ## Scripting
 

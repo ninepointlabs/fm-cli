@@ -100,6 +100,13 @@ func TestViewsFitTheTerminal(t *testing.T) {
 			return m
 		},
 		"settings": func(m Model) Model { m.state = viewSettings; return m },
+		"about":    func(m Model) Model { m.state = viewAbout; return m },
+		"about-license": func(m Model) Model {
+			m.state = viewAbout
+			m.aboutShowLicense = true
+			m.aboutStatus = "No clipboard available (install wl-clipboard or xclip): help@ninepointlabs.com"
+			return m
+		},
 		"filter-typing": func(m Model) Model {
 			m.state = viewEmails
 			m.searchActive = true
@@ -256,5 +263,53 @@ func TestIdentitiesLoadedSelectsPreferred(t *testing.T) {
 	m = send(t, m, identitiesLoadedMsg{emails: []string{"a@example.com", "b@example.com", "c@example.com"}, defaultIdx: 2})
 	if m.identityIdx != 2 || m.identities[m.identityIdx] != "c@example.com" {
 		t.Errorf("identityIdx = %d, identities = %v", m.identityIdx, m.identities)
+	}
+}
+
+func TestAboutScreen(t *testing.T) {
+	m := testModel(80, 24)
+	m.state = viewEmails
+	m = send(t, m, key("5"))
+	if m.state != viewAbout {
+		t.Fatalf("5 went to %v, want About", m.state)
+	}
+	view := m.View()
+	for _, want := range []string{"fm-cli", "Nine Point Labs", "help@ninepointlabs.com", "MIT License"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("About lacks %q", want)
+		}
+	}
+
+	m = send(t, m, key("l"))
+	if !m.aboutShowLicense || !strings.Contains(m.View(), "Permission is hereby granted") {
+		t.Fatal("l should show the license text")
+	}
+	for range 100 {
+		m = send(t, m, key("j"))
+	}
+	if !strings.Contains(m.View(), "SOFTWARE.") {
+		t.Fatal("scrolling down should reach the end of the license")
+	}
+	if maxScroll := len(m.aboutLines()) - m.bodyViewHeight(); m.aboutScroll != maxScroll {
+		t.Fatalf("scroll %d, want clamped to %d", m.aboutScroll, maxScroll)
+	}
+
+	m = send(t, m, aboutStatusMsg("Copied help@ninepointlabs.com"))
+	if !strings.Contains(strings.Join(m.aboutLines(), "\n"), "Copied help@ninepointlabs.com") {
+		t.Fatal("an action's message should show on the About screen")
+	}
+	if m = send(t, m, key("c")); m.state != viewAbout {
+		t.Fatalf("c on About must copy, not compose (state %v)", m.state)
+	}
+	if m = send(t, m, key("esc")); m.state != viewMainMenu {
+		t.Fatalf("esc went to %v, want the main menu", m.state)
+	}
+
+	// The main menu's last item opens it too.
+	for range len(mainMenuItems) {
+		m = send(t, m, key("j"))
+	}
+	if m = send(t, m, key("enter")); m.state != viewAbout {
+		t.Fatalf("the About menu item went to %v", m.state)
 	}
 }

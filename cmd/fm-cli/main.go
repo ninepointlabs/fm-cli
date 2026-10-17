@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"fm-cli/internal/about"
 	"fm-cli/internal/api"
 	"fm-cli/internal/auth"
 	"fm-cli/internal/cli"
@@ -32,6 +33,7 @@ var store = auth.NewStore()
 
 func main() {
 	cli.Version = version
+	about.Version = version
 	argv := os.Args[1:]
 
 	if cli.Handled(argv) {

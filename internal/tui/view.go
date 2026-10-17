@@ -36,6 +36,8 @@ func (m Model) View() string {
 		s.WriteString(m.searchView())
 	case viewSettings:
 		s.WriteString(m.settingsView())
+	case viewAbout:
+		s.WriteString(m.aboutView())
 	}
 
 	return appStyle.Render(s.String())
@@ -80,7 +82,7 @@ func (m Model) mainMenuView() string {
 	var s strings.Builder
 	s.WriteString(subtitleStyle.Render("Main Menu") + "\n\n")
 	icons := map[sessionState]string{
-		viewMailboxes: "📧", viewSearch: "🔍", viewCalendar: "📅", viewContacts: "👤", viewSettings: "🔧",
+		viewMailboxes: "📧", viewSearch: "🔍", viewCalendar: "📅", viewContacts: "👤", viewSettings: "🔧", viewAbout: "💬",
 	}
 	for i, item := range mainMenuItems {
 		label := icons[item.State] + " " + item.Name
