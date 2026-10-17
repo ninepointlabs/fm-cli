@@ -19,7 +19,7 @@ const (
 	SupportEmail = "help@ninepointlabs.com"
 	Created      = "January 2026" // first commit: 2026-01-16
 	LicenseName  = "MIT License"
-	Copyright    = "© 2026 Tim Apple" // as written in LICENSE
+	Copyright    = "© 2026 Nine Point Labs" // as written in LICENSE
 
 	Privacy = "No telemetry, no analytics and no Nine Point Labs servers. fm-cli talks only to Fastmail: " +
 		"api.fastmail.com to sign in (OAuth discovery, client registration, tokens, revocation) and for " +
