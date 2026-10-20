@@ -7,7 +7,7 @@ full-screen mail app, a set of scriptable commands that print JSON, and a
 live `watch` that follows your mailbox over Fastmail's push connection. It is
 the engine behind the [Fastmail plugin for Omarchy](https://github.com/ninepointlabs/omarchy-fastmail).
 
-![The fm-cli terminal app reading a thread](docs/tui.png)
+![The fm-cli terminal app showing an inbox of sample mail](docs/tui.png)
 
 ## Install
 
