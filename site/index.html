@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>fm-cli: Fastmail from the terminal</title>
+    <meta name="description" content="fm-cli is a small Go client for Fastmail's JMAP API: a full-screen terminal mail app, scriptable commands that print JSON, and a live watch over Fastmail's push connection." />
+    <link rel="canonical" href="https://fm-cli.ninepointlabs.com/" />
+    <meta property="og:title" content="fm-cli: Fastmail from the terminal" />
+    <meta property="og:description" content="A small Go client for Fastmail's JMAP API: a full-screen terminal mail app, scriptable commands that print JSON, and a live watch over Fastmail's push connection." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://fm-cli.ninepointlabs.com/" />
+    <meta property="og:image" content="https://fm-cli.ninepointlabs.com/tui.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="620" />
+    <meta property="og:image:alt" content="The fm-cli terminal app reading a thread" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#0c0e11" />
+    <link rel="stylesheet" href="style.css" />
+    <script>window.goatcounter={path:function(p){return location.host+p}}</script>
+    <script data-goatcounter="https://goatcounter-production-af4b.up.railway.app/count" async src="https://goatcounter-production-af4b.up.railway.app/count.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to the content</a>
+
+    <header class="top wrap">
+      <a class="brand" href="./">fm-cli</a>
+      <nav aria-label="Site">
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/ninepointlabs/fm-cli">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero wrap" aria-labelledby="title">
+        <p class="eyebrow">Terminal · Go · MIT</p>
+        <h1 id="title">Fastmail from the <span class="hl">terminal</span>.</h1>
+        <p class="lede">fm-cli is a small Go client for Fastmail’s JMAP API. It gives you a full-screen mail app, a set of scriptable commands that print JSON, and a live <code>watch</code> that follows your mailbox over Fastmail’s push connection. It’s for Fastmail users who live in a terminal, and it’s the engine behind the <a href="https://github.com/ninepointlabs/omarchy-fastmail">Fastmail plugin for Omarchy</a>.</p>
+        <div class="actions">
+          <a class="button primary" href="#install">Install</a>
+          <a class="button" href="https://github.com/ninepointlabs/fm-cli/releases/latest">Latest release</a>
+          <a class="button" href="https://github.com/ninepointlabs/fm-cli">Source on GitHub</a>
+        </div>
+      </section>
+
+      <div class="wrap">
+        <figure class="shot"><img src="tui.png" alt="The fm-cli terminal app reading a thread" width="1200" height="620" /></figure>
+      </div>
+
+      <section class="band wrap" id="features" aria-labelledby="features-title">
+        <h2 id="features-title">What it does</h2>
+        <ul class="features">
+          <li>
+            <h3>A full-screen mail app</h3>
+            <p>Folders, threads, reading with links you can click, reply, reply all, forward, drafts, flags, archive, move, delete and search, all from the keyboard.</p>
+          </li>
+          <li>
+            <h3>Compose in your editor</h3>
+            <p>Write mail in <code>$EDITOR</code>, with contact autocomplete and a choice of sending identity.</p>
+          </li>
+          <li>
+            <h3>Calendar and contacts</h3>
+            <p>A two-week calendar agenda and your contacts, over CalDAV and CardDAV with a Fastmail app password.</p>
+          </li>
+          <li>
+            <h3>Commands that print JSON</h3>
+            <p>List accounts and folders, view mail, mark it seen, and create, rename or delete folders. Every command takes <code>--json</code> and prints exactly one JSON object.</p>
+          </li>
+          <li>
+            <h3>A live <code>watch</code></h3>
+            <p>Holds a JMAP push connection open and prints a JSON line for every added, updated or deleted email.</p>
+          </li>
+          <li>
+            <h3>Offline mode</h3>
+            <p>Caches mail and bodies locally in SQLite so you can read and draft offline, then <code>fm-cli sync</code> pushes the queued changes.</p>
+          </li>
+          <li>
+            <h3>Easy, careful sign-in</h3>
+            <p><code>fm-cli auth login</code> opens Fastmail’s consent page in your browser. Tokens go into your system keyring, never a file, and refresh themselves.</p>
+          </li>
+          <li>
+            <h3>Inline images</h3>
+            <p>In terminals that can draw them (Sixel, the Kitty graphics protocol or iTerm2 images), and only when you ask.</p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="band wrap" id="install" aria-labelledby="install-title">
+        <h2 id="install-title">Install</h2>
+        <div class="steps">
+          <div>
+            <h3>On Omarchy</h3>
+            <pre><code>omarchy-mise-install github:ninepointlabs/fm-cli fm-cli</code></pre>
+          </div>
+          <div>
+            <h3>With mise elsewhere</h3>
+            <pre><code>mise use -g github:ninepointlabs/fm-cli@latest</code></pre>
+          </div>
+          <div>
+            <h3>With autonomix-cli</h3>
+            <p><a href="https://github.com/ninepointlabs/autonomix-cli">autonomix-cli</a> installs it from GitHub Releases and keeps it updated.</p>
+            <pre><code>autonomix-cli add https://github.com/ninepointlabs/fm-cli</code></pre>
+          </div>
+          <div>
+            <h3>Packages and tarballs</h3>
+            <p>Every <a href="https://github.com/ninepointlabs/fm-cli/releases/latest">release</a> ships <code>.pkg.tar.zst</code>, <code>.deb</code> and <code>.rpm</code> packages and plain tarballs for Linux and macOS.</p>
+          </div>
+          <div>
+            <h3>From source</h3>
+            <p>Go 1.26 or newer. No C toolchain needed.</p>
+            <pre><code>git clone https://github.com/ninepointlabs/fm-cli.git
+cd fm-cli
+go build -o fm-cli ./cmd/fm-cli</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="band wrap" id="start" aria-labelledby="start-title">
+        <h2 id="start-title">Get started</h2>
+        <div class="steps">
+          <div>
+            <p>Sign in. This opens Fastmail’s consent page in your browser; approve fm-cli there and you’re done. Prefer an API token? <code>fm-cli auth login --token</code> takes one instead.</p>
+            <pre><code>fm-cli auth login</code></pre>
+          </div>
+          <div>
+            <p>Open the app, or ask for your mail as JSON.</p>
+            <pre><code>fm-cli
+fm-cli box view inbox --limit 20 --json</code></pre>
+          </div>
+        </div>
+        <p>Keys, every command and the full JSON contract are in the <a href="https://github.com/ninepointlabs/fm-cli#readme">README</a>.</p>
+      </section>
+    </main>
+
+    <footer class="foot wrap">
+      <p>MIT licensed, see the <a href="https://github.com/ninepointlabs/fm-cli/blob/main/LICENSE">license</a>. Not affiliated with Fastmail.</p>
+      <ul>
+        <li><a href="https://ninepointlabs.com">Nine Point Labs</a></li>
+        <li><a href="https://blog.ninepointlabs.com">Blog</a></li>
+        <li><a href="https://github.com/ninepointlabs/fm-cli">GitHub</a></li>
+      </ul>
+    </footer>
+  </body>
+</html>
