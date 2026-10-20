@@ -1,5 +1,7 @@
 # fm-cli
 
+Website: https://fm-cli.ninepointlabs.com
+
 Fastmail from the terminal: a small Go client for Fastmail's JMAP API with a
 full-screen mail app, a set of scriptable commands that print JSON, and a
 live `watch` that follows your mailbox over Fastmail's push connection. It is
