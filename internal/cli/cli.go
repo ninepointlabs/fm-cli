@@ -50,6 +50,8 @@ func classify(err error) *Error {
 	switch {
 	case errors.Is(err, auth.ErrSignedOut):
 		return &Error{Code: "auth", Message: "Not signed in", Hint: "Run `fm-cli auth login`."}
+	case errors.Is(err, auth.ErrKeyringUnavailable):
+		return &Error{Code: "keyring", Message: "No keyring available", Hint: "fm-cli keeps credentials in the desktop secret store (Secret Service, KWallet, Keychain or Credential Manager). Start one, or set FM_API_TOKEN."}
 	case errors.Is(err, auth.ErrReauthenticate), errors.Is(err, api.ErrUnauthorized):
 		return &Error{Code: "auth", Message: "Fastmail rejected the stored credential", Hint: "Run `fm-cli auth login` to sign in again."}
 	case errors.Is(err, context.DeadlineExceeded):

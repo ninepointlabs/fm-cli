@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/mail"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,14 +43,12 @@ func main() {
 	if len(argv) > 0 {
 		switch argv[0] {
 		case "settings":
-			settings()
-			return
+			os.Exit(settings(os.Args[2:]))
 		case "sync":
 			syncNow()
 			return
 		case "debug":
-			debugSession()
-			return
+			os.Exit(debugSession())
 		case "tui":
 			// fall through to the TUI
 		}
@@ -285,15 +284,17 @@ func runTUI(opts tuiOptions) {
 // overrides it.
 const defaultFromKey = "default_from"
 
-func settings() {
+// settings shows or changes a stored setting and returns the exit code: 2 for
+// a bad command line, 1 when storage fails.
+func settings(args []string) int {
 	db, err := storage.Open()
 	if err != nil {
-		fmt.Printf("Error opening storage: %v\n", err)
-		return
+		fmt.Fprintf(os.Stderr, "fm-cli: could not open storage: %v\n", err)
+		return 1
 	}
 	defer db.Close()
 
-	if len(os.Args) < 3 {
+	if len(args) == 0 {
 		// Show current settings
 		offlineMode, _ := db.GetConfig("offline_mode")
 		defaultFrom, _ := db.GetConfig(defaultFromKey)
@@ -308,41 +309,68 @@ func settings() {
 		fmt.Println("  fm-cli settings offline off     - Disable offline mode")
 		fmt.Println("  fm-cli settings from <address>  - Default sending identity")
 		fmt.Println("  fm-cli settings from off        - Use the first identity Fastmail lists")
-		return
+		return 0
 	}
 
-	switch os.Args[2] {
+	switch args[0] {
 	case "offline":
-		if len(os.Args) < 4 {
-			fmt.Println("Usage: fm-cli settings offline [on|off]")
-			return
+		if len(args) != 2 {
+			fmt.Fprintln(os.Stderr, "Usage: fm-cli settings offline [on|off]")
+			return 2
 		}
-		switch os.Args[3] {
+		var value, message string
+		switch args[1] {
 		case "on", "true", "1":
-			db.SetConfig("offline_mode", "true")
-			fmt.Println("Offline mode enabled. Emails will be stored locally.")
+			value, message = "true", "Offline mode enabled. Emails will be stored locally."
 		case "off", "false", "0":
-			db.SetConfig("offline_mode", "false")
-			fmt.Println("Offline mode disabled.")
+			value, message = "false", "Offline mode disabled."
 		default:
-			fmt.Println("Usage: fm-cli settings offline [on|off]")
+			fmt.Fprintf(os.Stderr, "fm-cli: invalid offline value %q\nUsage: fm-cli settings offline [on|off]\n", args[1])
+			return 2
 		}
+		if err := db.SetConfig("offline_mode", value); err != nil {
+			fmt.Fprintf(os.Stderr, "fm-cli: could not save the setting: %v\n", err)
+			return 1
+		}
+		fmt.Println(message)
 	case "from":
-		if len(os.Args) < 4 {
-			fmt.Println("Usage: fm-cli settings from [<address>|off]")
-			return
+		if len(args) != 2 {
+			fmt.Fprintln(os.Stderr, "Usage: fm-cli settings from [<address>|off]")
+			return 2
 		}
-		switch addr := strings.TrimSpace(os.Args[3]); addr {
-		case "off", "":
-			db.SetConfig(defaultFromKey, "")
+		addr, err := parseFromSetting(args[1])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fm-cli: %v\nUsage: fm-cli settings from [<address>|off]\n", err)
+			return 2
+		}
+		if err := db.SetConfig(defaultFromKey, addr); err != nil {
+			fmt.Fprintf(os.Stderr, "fm-cli: could not save the setting: %v\n", err)
+			return 1
+		}
+		if addr == "" {
 			fmt.Println("Default sending identity cleared. The first identity is used.")
-		default:
-			db.SetConfig(defaultFromKey, addr)
+		} else {
 			fmt.Printf("Default sending identity set to %s. If it matches no identity, the first one is used.\n", addr)
 		}
 	default:
-		fmt.Printf("Unknown setting: %s\n", os.Args[2])
+		fmt.Fprintf(os.Stderr, "fm-cli: unknown setting %q\n", args[0])
+		return 2
 	}
+	return 0
+}
+
+// parseFromSetting checks a `settings from` value: "off" or "" clears it,
+// anything else must be a bare email address such as me@example.com.
+func parseFromSetting(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "off" || value == "" {
+		return "", nil
+	}
+	parsed, err := mail.ParseAddress(value)
+	if err != nil || parsed.Name != "" || parsed.Address != value {
+		return "", fmt.Errorf("invalid email address %q", value)
+	}
+	return parsed.Address, nil
 }
 
 func fromStr(val string) string {
@@ -446,14 +474,17 @@ func syncAction(client *api.Client, db *storage.DB, action storage.PendingAction
 	}
 }
 
-func debugSession() {
+// debugSession dumps the JMAP session and DAV status. It returns 1 when any
+// check failed.
+func debugSession() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	client, err := connect(ctx)
 	if err != nil {
-		fmt.Printf("Error connecting to Fastmail: %v\n", err)
-		return
+		fmt.Fprintf(os.Stderr, "Error connecting to Fastmail: %v\n", err)
+		return 1
 	}
+	code := 0
 
 	fmt.Printf("fm-cli %s", version)
 	if commit != "" {
@@ -472,14 +503,15 @@ func debugSession() {
 
 		davClient, err := api.NewDAVClient(email, appPwd)
 		if err != nil {
-			fmt.Printf("Error creating DAV client: %v\n", err)
-			return
+			fmt.Fprintf(os.Stderr, "Error creating DAV client: %v\n", err)
+			return 1
 		}
 
 		fmt.Println("\nFetching calendars...")
 		calendars, err := davClient.FetchCalendars(context.Background())
 		if err != nil {
-			fmt.Printf("Error fetching calendars: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error fetching calendars: %v\n", err)
+			code = 1
 		} else {
 			fmt.Printf("Found %d calendar(s):\n", len(calendars))
 			for _, c := range calendars {
@@ -490,7 +522,8 @@ func debugSession() {
 		fmt.Println("\nFetching address books...")
 		addressBooks, err := davClient.FetchAddressBooks(context.Background())
 		if err != nil {
-			fmt.Printf("Error fetching address books: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error fetching address books: %v\n", err)
+			code = 1
 		} else {
 			fmt.Printf("Found %d address book(s):\n", len(addressBooks))
 			for _, ab := range addressBooks {
@@ -501,4 +534,5 @@ func debugSession() {
 		fmt.Println("\nNo CalDAV/CardDAV credentials configured.")
 		fmt.Println("Run 'fm-cli auth dav' to store an app password for calendar/contacts.")
 	}
+	return code
 }

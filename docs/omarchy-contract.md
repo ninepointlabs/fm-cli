@@ -21,10 +21,11 @@ Success, on stdout, exit 0:
 Failure, on stderr, nothing on stdout, exit 1, or exit 2 when `code` is `"usage"`:
 
 ```json
-{"ok": false, "error": "message", "code": "auth|usage|network|remote|busy", "hint": "optional"}
+{"ok": false, "error": "message", "code": "auth|usage|network|keyring|remote|busy", "hint": "optional"}
 ```
 
-`code: "auth"` means signed out or the credential was rejected. `code: "busy"`
+`code: "auth"` means signed out or the credential was rejected. `code: "keyring"`
+means no system keyring could be opened. `code: "busy"`
 means another `fm-cli watch` already holds the per-user watch lock. An unknown
 subcommand, flag, or `--events` value fails with `code: "usage"` and the text
 `unknown command "x"` / `unknown flag "--x"` / `unknown event "x"`, so a plugin
@@ -57,7 +58,7 @@ Always succeeds (exit 0), even when signed out:
   "username": "tim@example.com", // JMAP session username, "" when signed out
   "expires_at": "2026-09-09T20:00:00Z", // access-token expiry, null for API tokens
   "refresh_available": true,     // an OAuth refresh token is stored
-  "storage": "keyring",          // "keyring" | "env"
+  "storage": "keyring",          // "keyring" | "env" | "none" (no keyring available)
   "base_url": "https://api.fastmail.com"
 }, "summary": "Signed in as tim@example.com"}
 ```
