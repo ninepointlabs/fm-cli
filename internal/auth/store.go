@@ -30,6 +30,10 @@ const (
 // ErrSignedOut reports that no usable credential is stored.
 var ErrSignedOut = errors.New("not signed in")
 
+// ErrKeyringUnavailable reports that no supported system keyring could be
+// opened, so nothing can be read from or written to it.
+var ErrKeyringUnavailable = errors.New("no keyring available")
+
 // Kind is how a credential authenticates.
 type Kind string
 
@@ -117,7 +121,7 @@ func (s *Store) Load() (*Credentials, error) {
 		if token := strings.TrimSpace(os.Getenv("FM_API_TOKEN")); token != "" {
 			return &Credentials{Kind: KindToken, APIToken: token, Issuer: DefaultIssuer, Storage: "env"}, nil
 		}
-		return nil, fmt.Errorf("keyring unavailable: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrKeyringUnavailable, err)
 	}
 
 	if item, err := ring.Get(credentialsKey); err == nil {
@@ -154,7 +158,7 @@ func (s *Store) Load() (*Credentials, error) {
 func (s *Store) Save(creds *Credentials) error {
 	ring, err := s.open()
 	if err != nil {
-		return fmt.Errorf("keyring unavailable: %w", err)
+		return fmt.Errorf("%w: %w", ErrKeyringUnavailable, err)
 	}
 	data, err := json.Marshal(creds)
 	if err != nil {
@@ -172,7 +176,7 @@ func (s *Store) Save(creds *Credentials) error {
 func (s *Store) Clear() error {
 	ring, err := s.open()
 	if err != nil {
-		return fmt.Errorf("keyring unavailable: %w", err)
+		return fmt.Errorf("%w: %w", ErrKeyringUnavailable, err)
 	}
 	var first error
 	for _, key := range []string{credentialsKey, legacyTokenKey} {
@@ -205,7 +209,7 @@ func (s *Store) DAVCredentials() (appPassword, email string) {
 func (s *Store) SaveDAVCredentials(appPassword, email string) error {
 	ring, err := s.open()
 	if err != nil {
-		return fmt.Errorf("keyring unavailable: %w", err)
+		return fmt.Errorf("%w: %w", ErrKeyringUnavailable, err)
 	}
 	if err := ring.Set(keyring.Item{Key: emailKey, Data: []byte(email), Label: "fm-cli Fastmail email"}); err != nil {
 		return err
@@ -220,7 +224,7 @@ func (s *Store) SaveDAVCredentials(appPassword, email string) error {
 func (s *Store) ClearDAVCredentials() error {
 	ring, err := s.open()
 	if err != nil {
-		return fmt.Errorf("keyring unavailable: %w", err)
+		return fmt.Errorf("%w: %w", ErrKeyringUnavailable, err)
 	}
 	_ = ring.Remove(appPasswordKey)
 	_ = ring.Remove(emailKey)

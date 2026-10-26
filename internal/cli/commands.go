@@ -32,6 +32,10 @@ func (app *App) authStatus(ctx context.Context) (*Result, error) {
 		if errors.Is(err, auth.ErrSignedOut) {
 			return &Result{Data: data, Summary: "Not signed in", Text: "Not signed in. Run `fm-cli auth login`."}, nil
 		}
+		if errors.Is(err, auth.ErrKeyringUnavailable) {
+			data["storage"] = "none"
+			return &Result{Data: data, Summary: "Not signed in: no keyring available", Text: "Not signed in: no keyring available. Start a desktop secret store, or set FM_API_TOKEN."}, nil
+		}
 		return nil, err
 	}
 	data["auth_type"] = string(creds.Kind)

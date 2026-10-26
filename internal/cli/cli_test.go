@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
+
+	"fm-cli/internal/auth"
 )
 
 func TestParseFlagsAnywhere(t *testing.T) {
@@ -148,5 +152,12 @@ func TestAbout(t *testing.T) {
 	}
 	if env.Data["organization"] != "Nine Point Labs" || env.Data["support"] != "help@ninepointlabs.com" || env.Data["privacy"] == "" {
 		t.Fatalf("data: %v", env.Data)
+	}
+}
+
+func TestClassifyKeyring(t *testing.T) {
+	err := fmt.Errorf("%w: %w", auth.ErrKeyringUnavailable, errors.New("backend not available"))
+	if e := classify(err); e.Code != "keyring" {
+		t.Fatalf("got code %q", e.Code)
 	}
 }
