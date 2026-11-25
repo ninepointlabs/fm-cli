@@ -11,13 +11,30 @@ the engine behind the [Fastmail plugin for Omarchy](https://github.com/ninepoint
 
 ## Install
 
-On Omarchy:
+On Omarchy, fm-cli is an optional package in the official Omarchy repo; it
+is not part of the default install. From the Omarchy menu: Super + Space >
+Install > Package, then type `fm-cli`. Or in a terminal:
+
+```bash
+omarchy pkg add fm-cli
+```
+
+Then sign in:
+
+```bash
+fm-cli auth login
+```
+
+See the [Omarchy manual on other packages](https://omarchy.org/manual/other-packages/).
+The repo package is 0.3.3. To get the latest (0.3.6), use mise.
+
+With mise (latest), on Omarchy:
 
 ```bash
 omarchy-mise-install github:ninepointlabs/fm-cli fm-cli
 ```
 
-With mise elsewhere:
+With mise (latest), elsewhere:
 
 ```bash
 mise use -g github:ninepointlabs/fm-cli@latest
