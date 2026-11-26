@@ -93,10 +93,17 @@
         <div class="steps">
           <div>
             <h3>On Omarchy</h3>
-            <pre><code>omarchy-mise-install github:ninepointlabs/fm-cli fm-cli</code></pre>
+            <p>fm-cli is an optional package in the official Omarchy repo; it is not part of the default install. From the Omarchy menu: Super + Space &gt; Install &gt; Package, then type <code>fm-cli</code>. Or in a terminal:</p>
+            <pre><code>omarchy pkg add fm-cli</code></pre>
+            <p>Then sign in:</p>
+            <pre><code>fm-cli auth login</code></pre>
+            <p>See the <a href="https://omarchy.org/manual/other-packages/">Omarchy manual on other packages</a>. The repo package is 0.3.3. To get the latest (0.3.6), use mise below.</p>
           </div>
           <div>
-            <h3>With mise elsewhere</h3>
+            <h3>With mise (latest)</h3>
+            <p>On Omarchy:</p>
+            <pre><code>omarchy-mise-install github:ninepointlabs/fm-cli fm-cli</code></pre>
+            <p>Elsewhere:</p>
             <pre><code>mise use -g github:ninepointlabs/fm-cli@latest</code></pre>
           </div>
           <div>
